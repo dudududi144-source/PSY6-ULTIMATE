@@ -59,6 +59,13 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--accent);color:#000;padding:8px 20px;border-radius:4px;font-size:12px;transition:transform .3s;z-index:1000}
 .toast.show{transform:translateX(-50%) translateY(0)}
 @media(max-width:900px){.main{grid-template-columns:1fr}}
+/* Performance Mode: hide editing panels, enlarge LCD + pads */
+body.perf-mode .seq-grid,body.perf-mode .xy-pad,body.perf-mode .viz-container{display:none}
+body.perf-mode .lcd{font-size:24px;padding:20px}
+body.perf-mode .lcd .section-name{font-size:36px}
+body.perf-mode .lcd .bar-info{font-size:16px}
+body.perf-mode .pad{aspect-ratio:auto;height:80px;font-size:18px}
+body.perf-mode .knob{width:72px;height:72px}
 </style>
 </head>
 <body>
@@ -82,6 +89,7 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="randomizeSound()">&#127922; SOUND</button>
         <button onclick="toggleMidiClock()" id="btnMidiClock">&#128337; CLOCK: OFF</button>
+        <button onclick="togglePerfMode()" id="btnPerfMode">&#127917; PERF</button>
         <button onclick="recordLoop()">&#9679; LOOP</button>
         <button id="btnLiveRec" onclick="toggleLiveRecording()">&#128308; LIVE REC</button>
         <button onclick="saveProject(prompt('Project name:','my-groove')||'default')">&#128190; SAVE</button>
@@ -137,6 +145,11 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
       <div class="panel-title">BRAIN — Candidate Generator</div>
       <div style="font-size:10px;color:var(--text-dim)" id="brainStatus">
         Mode: GENERATIVE | Candidates/bar: 5 | Last score: —
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="chip" onclick="triggerMacroBurst('SPACE')">&#127754; SPACE</button>
+        <button class="chip" onclick="triggerMacroBurst('ENERGY')">&#9889; ENERGY</button>
+        <button class="chip" onclick="triggerMacroBurst('TENSION')">&#128293; TENSION</button>
       </div>
     </div>
   </div>
@@ -1327,6 +1340,12 @@ function handleMIDI(msg){
         knobValues[k.id]=k.min+val*(k.max-k.min);
         updateKnob(k);
       }
+    } else if(cc===28){ // Macro: SPACE
+      applyMacro('SPACE',val);
+    } else if(cc===29){ // Macro: ENERGY
+      applyMacro('ENERGY',val);
+    } else if(cc===30){ // Macro: TENSION
+      applyMacro('TENSION',val);
     }
   }
 }
@@ -1637,6 +1656,17 @@ function importPresets(){
 // ============================================================
 // MIDI CLOCK TOGGLE
 // ============================================================
+function togglePerfMode(){
+  document.body.classList.toggle('perf-mode');
+  const isPerf=document.body.classList.contains('perf-mode');
+  const btn=document.getElementById('btnPerfMode');
+  if(btn){
+    btn.innerHTML=isPerf?'&#127917; EDIT':'&#127917; PERF';
+    btn.classList.toggle('active',isPerf);
+  }
+  toast(isPerf?'PERFORMANCE MODE — editing panels hidden':'EDIT MODE — full UI restored');
+}
+
 function toggleMidiClock(){
   midiClockEnabled=!midiClockEnabled;
   midiClockIntervals=[];
@@ -1648,6 +1678,60 @@ function toggleMidiClock(){
     btn.classList.toggle('active',midiClockEnabled);
   }
   toast('MIDI CLOCK SYNC: '+(midiClockEnabled?'ON — listening for external tempo':'OFF'));
+}
+
+// ============================================================
+// MACRO CONTROLS — Multi-parameter mapping
+// ============================================================
+const MACROS={
+  'SPACE':{ // Creates spatial depth
+    label:'SPACE',
+    params:[
+      {knob:'reverb',min:0,max:100},
+      {knob:'delay',min:0,max:100},
+      {knob:'filter',min:2000,max:18000}
+    ]
+  },
+  'ENERGY':{ // Creates intensity
+    label:'ENERGY',
+    params:[
+      {knob:'drive',min:0,max:100},
+      {knob:'volume',min:50,max:100},
+      {knob:'filter',min:500,max:18000}
+    ]
+  },
+  'TENSION':{ // Creates build-up tension
+    label:'TENSION',
+    params:[
+      {knob:'filter',min:200,max:18000},
+      {knob:'reso',min:0,max:25},
+      {knob:'swing',min:0,max:60}
+    ]
+  }
+};
+
+function applyMacro(name,value){
+  const macro=MACROS[name];
+  if(!macro)return;
+  macro.params.forEach(p=>{
+    const k=KNOBS.find(k=>k.id===p.knob);
+    if(!k)return;
+    const v=p.min+value*(p.max-p.min);
+    knobValues[p.knob]=clamp(v,k.min,k.max);
+    updateKnob(k);
+  });
+  // Update brain energy state for TENSION/ENERGY macros
+  if(name==='ENERGY')musicalState.energy=clamp(0.5+value*0.5,0,1);
+  if(name==='TENSION')musicalState.energy=clamp(0.3+value*0.7,0,1);
+  updateBrainStatus();
+}
+
+function triggerMacroBurst(name){
+  // Quick macro burst for live performance (ramp up then down)
+  if(!audioCtx)initAudio();
+  applyMacro(name,1.0);
+  setTimeout(()=>applyMacro(name,0.3),2000);
+  toast('MACRO BURST: '+name);
 }
 
 // ============================================================
