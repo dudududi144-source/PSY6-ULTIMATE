@@ -59,7 +59,9 @@ BPM · SWING · FILTER · RESO · DELAY · REVERB · DRIVE · VOL
 
 Connect any MIDI controller:
 - **Notes** -> Performance pads + teaches melodic grammar
-- **CC** -> Knobs (auto-learn on first touch)
+- **CC 20-27** -> Knobs (auto-learn on first touch)
+- **MIDI Clock** (0xF8) -> External tempo sync (toggle with CLOCK button)
+- **MIDI Start/Stop** (0xFA/0xFC) -> Transport control when clock enabled
 
 ## Architecture
 
@@ -82,6 +84,7 @@ Connect any MIDI controller:
 | 1.4 | State Persistence (localStorage) + RhythmGrammar integration + Save/Load project |
 | 1.5 | Multiple named projects + Style Builder (sound design randomizer) |
 | 1.6 | Live Recording (MediaRecorder) + Preset Export/Import |
+| 1.7 | MIDI Clock sync (external tempo + transport control) |
 
 ## License
 
