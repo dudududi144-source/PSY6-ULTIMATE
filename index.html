@@ -146,6 +146,7 @@ body.perf-mode .knob{width:72px;height:72px}
       <div style="font-size:10px;color:var(--text-dim)" id="brainStatus">
         Mode: GENERATIVE | Candidates/bar: 5 | Last score: —
       </div>
+      <canvas id="grammarCanvas" width="280" height="50" style="width:100%;height:50px;background:var(--panel2);border-radius:4px;margin-top:8px"></canvas>
       <div style="margin-top:8px;display:flex;gap:6px">
         <button class="chip" onclick="triggerMacroBurst('SPACE')">&#127754; SPACE</button>
         <button class="chip" onclick="triggerMacroBurst('ENERGY')">&#9889; ENERGY</button>
@@ -435,23 +436,49 @@ const grammars = {
   }
 };
 
+function decayGrammars(){
+  // Gentle decay: multiply all weights by 0.95
+  // This allows the system to adapt to new styles without forgetting everything
+  const decay=0.95;
+  for(let i=0;i<12;i++){
+    for(let j=0;j<12;j++){
+      grammars.bass.transitions[i][j]*=decay;
+    }
+  }
+  for(let i=0;i<25;i++){
+    grammars.melodic.intervals[i]*=decay;
+  }
+  for(let i=0;i<16;i++){
+    grammars.rhythm.kickOnset[i]*=decay;
+    grammars.rhythm.kickCount[i]*=decay;
+  }
+  grammars.bass.total*=decay;
+  grammars.melodic.total*=decay;
+}
+
 function updateGrammars(trackName, step, midi){
   if(trackName==='bass'){
     const pc = midi % 12;
     if(grammars.bass.lastPc !== null){
       grammars.bass.transitions[grammars.bass.lastPc][pc]++;
       grammars.bass.total++;
+      // Decay every 50 entries to allow style adaptation
+      if(Math.round(grammars.bass.total)%50===0)decayGrammars();
     }
     grammars.bass.lastPc = pc;
   } else if(trackName==='kick'){
-    grammars.rhythm.kickOnset[step]++;
-    grammars.rhythm.kickCount[step]++;
+    if(step>=0&&step<16){
+      grammars.rhythm.kickOnset[step]++;
+      grammars.rhythm.kickCount[step]++;
+    }
   } else if(trackName==='lead' || trackName==='arp'){
     if(grammars.melodic.lastMidi !== null){
       const interval = clamp(midi - grammars.melodic.lastMidi, -12, 12);
       grammars.melodic.intervals[interval + 12]++;
       grammars.melodic.total++;
       grammars.melodic.contourDir = interval > 0 ? 1 : (interval < 0 ? -1 : 0);
+      // Decay every 50 entries
+      if(Math.round(grammars.melodic.total)%50===0)decayGrammars();
     }
     grammars.melodic.lastMidi = midi;
   }
@@ -1373,6 +1400,7 @@ function initVisualizer(){
   
   function draw(){
     requestAnimationFrame(draw);
+    drawGrammarViz();
     if(!engine||!engine.analyser)return;
     
     engine.analyser.getByteFrequencyData(freqData);
@@ -1732,6 +1760,46 @@ function triggerMacroBurst(name){
   applyMacro(name,1.0);
   setTimeout(()=>applyMacro(name,0.3),2000);
   toast('MACRO BURST: '+name);
+}
+
+// ============================================================
+// GRAMMAR VISUALIZATION
+// ============================================================
+function drawGrammarViz(){
+  const canvas=document.getElementById('grammarCanvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  
+  // Draw melodic interval histogram (-12 to +12)
+  const intervals=grammars.melodic.intervals;
+  const maxVal=Math.max(...intervals,1);
+  const barW=w/25;
+  
+  for(let i=0;i<25;i++){
+    const val=intervals[i]/maxVal;
+    const barH=val*(h-10);
+    const x=i*barW;
+    const y=h-barH;
+    // Color: center (0 interval) is green, extremes are orange
+    const dist=Math.abs(i-12)/12;
+    const hue=140-dist*100;
+    ctx.fillStyle='hsla('+hue+',80%,50%,0.8)';
+    ctx.fillRect(x+1,y,barW-2,barH);
+  }
+  
+  // Draw center line (0 interval)
+  ctx.strokeStyle='rgba(255,255,255,0.3)';
+  ctx.beginPath();
+  ctx.moveTo(12*barW+barW/2,0);
+  ctx.lineTo(12*barW+barW/2,h);
+  ctx.stroke();
+  
+  // Label
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.font='8px monospace';
+  ctx.fillText('melodic intervals (-12 to +12)',4,10);
 }
 
 // ============================================================
