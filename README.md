@@ -48,6 +48,7 @@ The instrument builds statistical models in real-time:
 | H | Generate melody |
 | Z | Generate arpeggio |
 | R | Record + Export WAV (4 bars) |
+| S | Sound design randomizer |
 | 1-8 | Jump to section |
 
 ## Control Knobs
@@ -79,6 +80,7 @@ Connect any MIDI controller:
 | 1.2 | Master FX chain + swing fix + bass state tracking |
 | 1.3 | Grammar System + ADAPTIVE brain mode + grammar learning from performance |
 | 1.4 | State Persistence (localStorage) + RhythmGrammar integration + Save/Load project |
+| 1.5 | Multiple named projects + Style Builder (sound design randomizer) |
 
 ## License
 
