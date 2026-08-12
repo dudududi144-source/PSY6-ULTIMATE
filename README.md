@@ -60,6 +60,9 @@ BPM · SWING · FILTER · RESO · DELAY · REVERB · DRIVE · VOL
 Connect any MIDI controller:
 - **Notes** -> Performance pads + teaches melodic grammar
 - **CC 20-27** -> Knobs (auto-learn on first touch)
+- **CC 28** -> SPACE macro (reverb + delay + filter)
+- **CC 29** -> ENERGY macro (drive + volume + filter)
+- **CC 30** -> TENSION macro (filter + reso + swing)
 - **MIDI Clock** (0xF8) -> External tempo sync (toggle with CLOCK button)
 - **MIDI Start/Stop** (0xFA/0xFC) -> Transport control when clock enabled
 
@@ -85,6 +88,7 @@ Connect any MIDI controller:
 | 1.5 | Multiple named projects + Style Builder (sound design randomizer) |
 | 1.6 | Live Recording (MediaRecorder) + Preset Export/Import |
 | 1.7 | MIDI Clock sync (external tempo + transport control) |
+| 1.8 | Macro Controls (SPACE/ENERGY/TENSION) + Performance Mode |
 
 ## License
 
