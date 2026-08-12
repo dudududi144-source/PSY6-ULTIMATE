@@ -1,0 +1,19 @@
+{
+  "name": "psy6-ultimate",
+  "version": "1.0.0",
+  "description": "PSY6 ULTIMATE — Standalone Psytrance Performance Instrument",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx serve ."
+  },
+  "keywords": [
+    "psytrance",
+    "web-audio",
+    "synthesizer",
+    "groovebox",
+    "generative-music"
+  ],
+  "author": "dudududi144-source",
+  "license": "MIT"
+}
