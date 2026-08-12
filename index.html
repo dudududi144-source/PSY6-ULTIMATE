@@ -81,6 +81,7 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
         <button onclick="reseed()">&#8635; VARIATION (V)</button>
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="randomizeSound()">&#127922; SOUND</button>
+        <button onclick="toggleMidiClock()" id="btnMidiClock">&#128337; CLOCK: OFF</button>
         <button onclick="recordLoop()">&#9679; LOOP</button>
         <button id="btnLiveRec" onclick="toggleLiveRecording()">&#128308; LIVE REC</button>
         <button onclick="saveProject(prompt('Project name:','my-groove')||'default')">&#128190; SAVE</button>
@@ -227,6 +228,12 @@ SP('arp','PS-ARP-ACID','Psy Acid Arp','PSYTRANCE',{wave1:'square',wave2:'sawtoot
 SP('arp','TR-ARP-ROLL','Trance Rolling Arp','TRANCE',{wave1:'sawtooth',wave2:'sawtooth',detune:12,cutoff:2600,gate:.28,dec:.12,sus:.2,poly:6});
 
 let currentGenre='PSYTRANCE', currentScale='Phrygian Dominant';
+// MIDI Clock sync state
+let midiClockEnabled=false;
+let midiClockCount=0;
+let midiClockLastTime=0;
+let midiClockIntervals=[];
+let midiClockDetectedBpm=0;
 let currentPreset={bass:LIB.bass[0],lead:LIB.lead[0],arp:LIB.arp[0],pad:LIB.pad[0]};
 let currentDrumPreset=LIB.drum[0];
 
@@ -1250,12 +1257,58 @@ function initMIDI(){
 }
 
 function handleMIDI(msg){
-  if(!msg.data||msg.data.length<3)return;
-  const[data1,data2,data3]=msg.data;
-  const cmd=data1&0xf0;
-  if(cmd===0x90&&data3>0){ // Note On
-    const midi=data2;
-    const vel=data3/127;
+  if(!msg.data||msg.data.length<1)return;
+  const status=msg.data[0];
+  const data1=msg.data.length>1?msg.data[1]:0;
+  const data2=msg.data.length>2?msg.data[2]:0;
+  
+  // --- MIDI Clock Sync (0xF8 = clock, 0xFA = start, 0xFC = stop) ---
+  if(status===0xF8){ // MIDI Clock tick (24 per quarter note)
+    if(!midiClockEnabled)return;
+    const now=performance.now();
+    if(midiClockLastTime>0){
+      const interval=now-midiClockLastTime;
+      if(interval>0&&interval<500){ // sanity check
+        midiClockIntervals.push(interval);
+        if(midiClockIntervals.length>24)midiClockIntervals.shift();
+        // Calculate BPM from average interval
+        if(midiClockIntervals.length>=6){
+          const avg=midiClockIntervals.reduce((a,b)=>a+b,0)/midiClockIntervals.length;
+          const bpm=60000/(avg*24); // 24 clocks per quarter
+          midiClockDetectedBpm=clamp(Math.round(bpm),60,200);
+          // Smooth update of currentBpm
+          if(Math.abs(midiClockDetectedBpm-currentBpm)>=1){
+            currentBpm=currentBpm*0.7+midiClockDetectedBpm*0.3;
+            knobValues.bpm=currentBpm;
+            updateKnob(KNOBS[0]);
+            updateLCD();
+          }
+        }
+      }
+    }
+    midiClockLastTime=now;
+    midiClockCount++;
+    return;
+  }
+  if(status===0xFA){ // MIDI Start
+    if(midiClockEnabled&&!isPlaying){togglePlay()}
+    return;
+  }
+  if(status===0xFC){ // MIDI Stop
+    if(midiClockEnabled&&isPlaying){togglePlay()}
+    return;
+  }
+  if(status===0xFB){ // MIDI Continue
+    if(midiClockEnabled&&!isPlaying){togglePlay()}
+    return;
+  }
+  
+  // --- Regular MIDI messages (need 3 bytes) ---
+  if(msg.data.length<3)return;
+  const cmd=status&0xf0;
+  if(cmd===0x90&&data2>0){ // Note On
+    const midi=data1;
+    const vel=data2/127;
     if(!audioCtx)initAudio();
     if(audioCtx.state==='suspended')audioCtx.resume();
     const preset=currentPreset.lead||LIB.lead[0];
@@ -1266,8 +1319,8 @@ function handleMIDI(msg){
     updateBrainStatus();
   } else if(cmd===0xB0){ // CC
     // Map CC to knobs (auto-learn)
-    const cc=data2,val=data3/127;
-    if(cc>=20&&cc<=24){
+    const cc=data1,val=data2/127;
+    if(cc>=20&&cc<=27){
       const knobIdx=cc-20;
       if(knobIdx<KNOBS.length){
         const k=KNOBS[knobIdx];
@@ -1579,6 +1632,22 @@ function importPresets(){
     reader.readAsText(file);
   };
   input.click();
+}
+
+// ============================================================
+// MIDI CLOCK TOGGLE
+// ============================================================
+function toggleMidiClock(){
+  midiClockEnabled=!midiClockEnabled;
+  midiClockIntervals=[];
+  midiClockLastTime=0;
+  midiClockCount=0;
+  const btn=document.getElementById('btnMidiClock');
+  if(btn){
+    btn.innerHTML='&#128337; CLOCK: '+(midiClockEnabled?'ON':'OFF');
+    btn.classList.toggle('active',midiClockEnabled);
+  }
+  toast('MIDI CLOCK SYNC: '+(midiClockEnabled?'ON — listening for external tempo':'OFF'));
 }
 
 // ============================================================
