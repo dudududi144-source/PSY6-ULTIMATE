@@ -79,6 +79,7 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
         <button id="btnPlay" onclick="togglePlay()">&#9654; PLAY</button>
         <button onclick="stopEngine()">&#9632; STOP</button>
         <button onclick="reseed()">&#8635; VARIATION (V)</button>
+        <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="recordLoop()">&#9679; REC (R)</button>
       </div>
       <div class="section-btns" id="sectionBtns"></div>
@@ -303,11 +304,112 @@ function applyBestCandidate(){
   updateSeqUI();
 }
 
-function updateBrainStatus(){
-  const el=document.getElementById('brainStatus');
-  if(el) el.innerHTML='Mode: '+brainMode+' | Candidates/bar: 5 | Last score: '+lastCandidateScore+'<br>State: lead='+musicalState.leadLastMidi+' bass='+musicalState.bassLastMidi+' energy='+musicalState.energy.toFixed(2);
+function cycleBrainMode(){
+  const modes=['GENERATIVE','MANUAL','ADAPTIVE'];
+  const idx=(modes.indexOf(brainMode)+1)%modes.length;
+  brainMode=modes[idx];
+  const btn=document.getElementById('btnBrainMode');
+  if(btn){
+    btn.innerHTML='&#129504; '+brainMode;
+    btn.classList.toggle('active',brainMode==='ADAPTIVE');
+  }
+  toast('BRAIN MODE: '+brainMode);
+  updateBrainStatus();
 }
 
+function updateBrainStatus(){
+  const el=document.getElementById('brainStatus');
+  if(!el)return;
+  const conf=grammarConfidence();
+  const bassLearned=grammars.bass.total;
+  const melLearned=grammars.melodic.total;
+  let html='Mode: <b>'+brainMode+'</b> | Candidates/bar: 5 | Last score: '+lastCandidateScore;
+  html+='<br>State: lead='+musicalState.leadLastMidi+' bass='+musicalState.bassLastMidi;
+  html+='<br>Grammar: bass='+bassLearned+' melodic='+melLearned+' conf='+(conf*100).toFixed(0)+'%';
+  el.innerHTML=html;
+}
+
+
+// ============================================================
+// GRAMMAR SYSTEM — Statistical Learning (from PSY4)
+// ============================================================
+const grammars = {
+  bass: {
+    // 12x12 interval transition matrix (probability)
+    transitions: Array.from({length:12},()=>Array(12).fill(0)),
+    total: 0,
+    lastPc: null
+  },
+  rhythm: {
+    // 16-step kick onset probability
+    kickOnset: Array(16).fill(0),
+    kickCount: Array(16).fill(0),
+    hatDensity: 0,
+    hatCount: 0
+  },
+  melodic: {
+    // Interval histogram (-12 to +12)
+    intervals: Array(25).fill(0),
+    total: 0,
+    lastMidi: null,
+    contourDir: 0
+  }
+};
+
+function updateGrammars(trackName, step, midi){
+  if(trackName==='bass'){
+    const pc = midi % 12;
+    if(grammars.bass.lastPc !== null){
+      grammars.bass.transitions[grammars.bass.lastPc][pc]++;
+      grammars.bass.total++;
+    }
+    grammars.bass.lastPc = pc;
+  } else if(trackName==='kick'){
+    grammars.rhythm.kickOnset[step]++;
+    grammars.rhythm.kickCount[step]++;
+  } else if(trackName==='lead' || trackName==='arp'){
+    if(grammars.melodic.lastMidi !== null){
+      const interval = clamp(midi - grammars.melodic.lastMidi, -12, 12);
+      grammars.melodic.intervals[interval + 12]++;
+      grammars.melodic.total++;
+      grammars.melodic.contourDir = interval > 0 ? 1 : (interval < 0 ? -1 : 0);
+    }
+    grammars.melodic.lastMidi = midi;
+  }
+}
+
+function sampleBassFromGrammar(rootPc){
+  if(grammars.bass.total < 4) return rootPc; // not enough data
+  const lastPc = grammars.bass.lastPc || rootPc;
+  const row = grammars.bass.transitions[lastPc];
+  const total = row.reduce((a,b)=>a+b, 0);
+  if(total === 0) return rootPc;
+  // Weighted random selection
+  let r = rand() * total;
+  for(let pc=0; pc<12; pc++){
+    r -= row[pc];
+    if(r <= 0) return (rootPc + pc) % 12 + 36; // bass register
+  }
+  return rootPc + 36;
+}
+
+function sampleMelodicInterval(){
+  if(grammars.melodic.total < 4) return pick([-2,-1,1,2,3]); // not enough data
+  const total = grammars.melodic.intervals.reduce((a,b)=>a+b, 0);
+  if(total === 0) return 0;
+  let r = rand() * total;
+  for(let i=0; i<25; i++){
+    r -= grammars.melodic.intervals[i];
+    if(r <= 0) return i - 12;
+  }
+  return 0;
+}
+
+function grammarConfidence(){
+  const bassConf = Math.min(grammars.bass.total / 20, 1);
+  const melConf = Math.min(grammars.melodic.total / 20, 1);
+  return (bassConf + melConf) / 2;
+}
 
 // ============================================================
 // POOLED ENGINE — Zero GC Architecture
@@ -627,19 +729,33 @@ function scheduleStep(step,time){
     
     if(t===0){ // KICK
       engine.triggerDrum(time,currentDrumPreset,ev.vel||0.8,0);
-    } else if(t===1){ // BASS — rolling, follows root, updates state
+      updateGrammars('kick',step,0);
+    } else if(t===1){ // BASS — rolling, follows root, updates state + learns grammar
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
-      const bassNote=musicalState.bassLastMidi+scale[(ev.note||0)%scale.length];
+      let bassNote;
+      if(brainMode==='ADAPTIVE' && grammarConfidence()>0.3){
+        bassNote=sampleBassFromGrammar(scale[0]);
+      } else {
+        bassNote=musicalState.bassLastMidi+scale[(ev.note||0)%scale.length];
+      }
       engine.triggerSynth(time,bassNote,currentPreset.bass,stepDur*(currentPreset.bass.gate||0.4),1);
       musicalState.bassLastMidi=bassNote;
+      updateGrammars('bass',step,bassNote);
     } else if(t===2){ // PERC
       const percPreset=LIB.drum.find(d=>d.type==='hatC')||currentDrumPreset;
       engine.triggerDrum(time,percPreset,ev.vel||0.5,2);
     } else if(t===3){ // LEAD
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
-      const leadNote=60+scale[(ev.note||0)%scale.length];
+      let leadNote;
+      if(brainMode==='ADAPTIVE' && grammarConfidence()>0.3){
+        const interval=sampleMelodicInterval();
+        leadNote=clamp(musicalState.leadLastMidi+interval,48,84);
+      } else {
+        leadNote=60+scale[(ev.note||0)%scale.length];
+      }
       engine.triggerSynth(time,leadNote,currentPreset.lead,stepDur*1.5,3);
       musicalState.leadLastMidi=leadNote;
+      updateGrammars('lead',step,leadNote);
     } else if(t===4){ // ARP
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
       const arpNote=72+scale[(ev.note||0)%scale.length];
@@ -1039,6 +1155,8 @@ function triggerPad(pad){
   pad.classList.add('triggered');
   setTimeout(()=>pad.classList.remove('triggered'),150);
   musicalState.leadLastMidi=midi;
+  // LEARN: user performance teaches the melodic grammar
+  updateGrammars('lead',-1,midi);
   updateBrainStatus();
 }
 
@@ -1071,6 +1189,9 @@ function handleMIDI(msg){
     const preset=currentPreset.lead||LIB.lead[0];
     engine.triggerSynth(audioCtx.currentTime+0.01,midi,preset,0.3,3);
     musicalState.leadLastMidi=midi;
+    // LEARN: MIDI performance teaches the melodic grammar
+    updateGrammars('lead',-1,midi);
+    updateBrainStatus();
   } else if(cmd===0xB0){ // CC
     // Map CC to knobs (auto-learn)
     const cc=data2,val=data3/127;
