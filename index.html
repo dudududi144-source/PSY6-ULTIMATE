@@ -644,7 +644,70 @@ function stopEngine(){
   updateLCD();updateSectionBtns();updateStepUI(-1);
 }
 
-function recordLoop(){toast('LOOP RECORD — coming in v1.1')}
+function recordLoop(){
+  if(!audioCtx)initAudio();
+  if(audioCtx.state==='suspended')audioCtx.resume();
+  toast('RECORDING 4 bars...');
+  const barsToRecord=4;
+  const stepDur=60/currentBpm/4;
+  const totalDur=barsToRecord*16*stepDur+1;
+  const offline=new OfflineAudioContext(2,audioCtx.sampleRate*totalDur,audioCtx.sampleRate);
+  const offEngine=new PooledEngine(offline);
+  let t=0.1;
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  for(let bar=0;bar<barsToRecord;bar++){
+    for(let step=0;step<16;step++){
+      for(let tr=0;tr<6;tr++){
+        if(trackMutes[tr])continue;
+        const pat=patterns[trackNames[tr]];
+        if(!pat||!pat[step]||!pat[step].on)continue;
+        const ev=pat[step];
+        if(tr===0){offEngine.triggerDrum(t,currentDrumPreset,ev.vel||0.8,0)}
+        else if(tr===1){const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];const bn=musicalState.bassLastMidi+scale[(ev.note||0)%scale.length]-12;offEngine.triggerSynth(t,bn,currentPreset.bass,stepDur*0.5,1)}
+        else if(tr===2){const pp=LIB.drum.find(d=>d.type==='hatC')||currentDrumPreset;offEngine.triggerDrum(t,pp,ev.vel||0.5,2)}
+        else if(tr===3){const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];const ln=60+scale[(ev.note||0)%scale.length];offEngine.triggerSynth(t,ln,currentPreset.lead,stepDur*1.5,3)}
+        else if(tr===4){const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];const an=72+scale[(ev.note||0)%scale.length];offEngine.triggerSynth(t,an,currentPreset.arp,stepDur*0.8,4)}
+        else if(tr===5){const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];const root=48+scale[0];offEngine.triggerSynth(t,root,currentPreset.pad,stepDur*8,5);offEngine.triggerSynth(t,root+scale[2],currentPreset.pad,stepDur*8,5)}
+      }
+      t+=stepDur;
+    }
+  }
+  offline.startRendering().then(buffer=>{
+    const wav=audioBufferToWav(buffer);
+    const blob=new Blob([wav],{type:'audio/wav'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='psy6-ultimate-'+Date.now()+'.wav';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('WAV EXPORTED — '+barsToRecord+' bars');
+  }).catch(e=>toast('Export failed: '+e.message));
+}
+
+function audioBufferToWav(buffer){
+  const numCh=buffer.numberOfChannels;
+  const sr=buffer.sampleRate;
+  const len=buffer.length*numCh*2+44;
+  const ab=new ArrayBuffer(len);
+  const view=new DataView(ab);
+  let offset=0;
+  function writeString(s){for(let i=0;i<s.length;i++){view.setUint8(offset+i,s.charCodeAt(i));offset+=s.length}}
+  function writeUint32(v){view.setUint32(offset,v,true);offset+=4}
+  function writeUint16(v){view.setUint16(offset,v,true);offset+=2}
+  writeString('RIFF');writeUint32(len-8);writeString('WAVE');
+  writeString('fmt ');writeUint32(16);writeUint16(1);writeUint16(numCh);
+  writeUint32(sr);writeUint32(sr*numCh*2);writeUint16(numCh*2);writeUint16(16);
+  writeString('data');writeUint32(buffer.length*numCh*2);
+  for(let i=0;i<buffer.length;i++){
+    for(let ch=0;ch<numCh;ch++){
+      let sample=buffer.getChannelData(ch)[i];
+      sample=Math.max(-1,Math.min(1,sample));
+      view.setInt16(offset,sample<0?sample*0x8000:sample*0x7FFF,true);
+      offset+=2;
+    }
+  }
+  return ab;
+}
 
 // ============================================================
 // UI — LCD, Sections, Sequencer, Knobs, XY Pad, Pads
@@ -915,6 +978,7 @@ function initMIDI(){
 }
 
 function handleMIDI(msg){
+  if(!msg.data||msg.data.length<3)return;
   const[data1,data2,data3]=msg.data;
   const cmd=data1&0xf0;
   if(cmd===0x90&&data3>0){ // Note On
