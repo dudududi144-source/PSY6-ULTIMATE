@@ -81,6 +81,7 @@ Connect any MIDI controller:
 | 1.3 | Grammar System + ADAPTIVE brain mode + grammar learning from performance |
 | 1.4 | State Persistence (localStorage) + RhythmGrammar integration + Save/Load project |
 | 1.5 | Multiple named projects + Style Builder (sound design randomizer) |
+| 1.6 | Live Recording (MediaRecorder) + Preset Export/Import |
 
 ## License
 
