@@ -162,7 +162,7 @@ let currentBpm=145, currentSwing=0, currentSection=0, currentBar=0, currentStep=
 let currentVariation=0, schedulerInterval=null, nextStepTime=0;
 let seed=Date.now(), patterns={}, trackMutes=[false,false,false,false,false,false];
 let brainMode='GENERATIVE';
-let musicalState={leadLastMidi:60,bassLastMidi:36,contourMomentum:0,energy:0.5};
+let musicalState={leadLastMidi:60,bassLastMidi:36,contourMomentum:0,energy:0.5,rootPc:0};
 let lastCandidateScore=0, xyCutoff=1500, xyRes=5;
 
 // --- Seeded Random ---
@@ -262,10 +262,13 @@ function generateCandidates(count){
     const syncopation=rand()*0.4;
     const contourDir=pick([-1,0,1]);
     const notes=[];
+    // Anchor lead around register center to prevent drift
+    const anchor=clamp(musicalState.leadLastMidi,55,76);
     for(let s=0;s<16;s++){
       if(rand()<density){
-        const scaleIdx=clamp(Math.round(musicalState.leadLastMidi%7)+contourDir*randInt(0,2)+registerShift,0,6);
-        const midi=60+scale[scaleIdx%scale.length]+registerShift*12;
+        const scaleIdx=clamp(Math.round(anchor%7)+contourDir*randInt(0,2)+registerShift,0,6);
+        let midi=60+scale[scaleIdx%scale.length]+registerShift*12;
+        midi=clamp(midi,48,84); // keep musical register
         notes.push({step:s,midi,vel:0.5+rand()*0.4});
       }
     }
@@ -460,7 +463,40 @@ class PooledEngine{
     this.comp.threshold.value=-8;this.comp.knee.value=12;
     this.comp.ratio.value=6;this.comp.attack.value=0.003;this.comp.release.value=0.2;
     this.analyser=ctx.createAnalyser();this.analyser.fftSize=256;
-    this.master.connect(this.comp);this.comp.connect(this.analyser);this.analyser.connect(ctx.destination);
+    // Master filter (XY pad controls this)
+    this.masterFilter=ctx.createBiquadFilter();
+    this.masterFilter.type='lowpass';
+    this.masterFilter.frequency.value=18000;
+    this.masterFilter.Q.value=0.5;
+    // Delay send (dotted-8th feedback)
+    this.delay=ctx.createDelay(2.0);
+    this.delay.delayTime.value=0.3;
+    this.delayFeedback=ctx.createGain();this.delayFeedback.gain.value=0.35;
+    this.delayMix=ctx.createGain();this.delayMix.gain.value=0.22;
+    // Reverb send
+    this.reverb=ctx.createConvolver();
+    this.reverb.buffer=this.makeImpulse(2.5,3.0);
+    this.reverbMix=ctx.createGain();this.reverbMix.gain.value=0.18;
+    // Drive (waveshaper)
+    this.drive=ctx.createWaveShaper();
+    this.drive.curve=this.makeDriveCurve(0);
+    this.drive.oversample='2x';
+    // Chain: master -> drive -> masterFilter -> comp -> analyser -> destination
+    this.master.connect(this.drive);
+    this.drive.connect(this.masterFilter);
+    this.masterFilter.connect(this.comp);
+    // Delay send: masterFilter -> delay (with feedback loop) -> delayMix -> comp
+    this.masterFilter.connect(this.delay);
+    this.delay.connect(this.delayFeedback);
+    this.delayFeedback.connect(this.delay);
+    this.delay.connect(this.delayMix);
+    this.delayMix.connect(this.comp);
+    // Reverb send: masterFilter -> reverb -> reverbMix -> comp
+    this.masterFilter.connect(this.reverb);
+    this.reverb.connect(this.reverbMix);
+    this.reverbMix.connect(this.comp);
+    this.comp.connect(this.analyser);
+    this.analyser.connect(ctx.destination);
     // Noise buffer
     const bufLen=ctx.sampleRate*2;
     this.noiseBuffer=ctx.createBuffer(1,bufLen,ctx.sampleRate);
@@ -509,6 +545,33 @@ class PooledEngine{
     v.hit(when,preset,vel);
     this.spawnCount++;
   }
+  makeImpulse(dur,decay){
+    const len=this.ctx.sampleRate*dur;
+    const buf=this.ctx.createBuffer(2,len,this.ctx.sampleRate);
+    for(let ch=0;ch<2;ch++){
+      const d=buf.getChannelData(ch);
+      for(let i=0;i<len;i++){
+        d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+      }
+    }
+    return buf;
+  }
+  makeDriveCurve(amount){
+    const n=256;
+    const curve=new Float32Array(n);
+    const k=amount*100+1;
+    for(let i=0;i<n;i++){
+      const x=i*2/n-1;
+      curve[i]=Math.tanh(k*x)/Math.tanh(k);
+    }
+    return curve;
+  }
+  setDelayMix(v){this.delayMix.gain.value=clamp(v,0,1)}
+  setDelayTime(sec){try{this.delay.delayTime.setTargetAtTime(sec,this.ctx.currentTime,0.1)}catch(e){}}
+  setReverbMix(v){this.reverbMix.gain.value=clamp(v,0,1)}
+  setDrive(amount){this.drive.curve=this.makeDriveCurve(amount)}
+  setFilterFreq(hz){try{this.masterFilter.frequency.setTargetAtTime(clamp(hz,40,18000),this.ctx.currentTime,0.02)}catch(e){}}
+  setFilterQ(q){try{this.masterFilter.Q.setTargetAtTime(clamp(q,0.1,30),this.ctx.currentTime,0.02)}catch(e){}}
   killAll(){
     for(const v of this.synthPool)v.panic();
     for(const v of this.drumPool)v.panic();
@@ -524,11 +587,13 @@ class PooledEngine{
 function scheduler(){
   if(!isPlaying||!engine)return;
   const stepDur=60/currentBpm/4; // 16th note duration
+  // Keep delay time synced to BPM (dotted 8th = 3 * 16th)
+  if(engine)engine.setDelayTime(stepDur*3);
   while(nextStepTime<audioCtx.currentTime+0.05){
-    scheduleStep(currentStep,nextStepTime);
-    // Advance
-    const swingOffset=(currentStep%2===1)?currentSwing*stepDur*0.5:0;
-    nextStepTime+=stepDur+swingOffset;
+    // Swing only delays offbeat (odd) steps; grid itself stays steady
+    const swingOffset=(currentStep%2===1)?currentSwing*stepDur*0.45:0;
+    scheduleStep(currentStep,nextStepTime+swingOffset);
+    nextStepTime+=stepDur;
     currentStep++;
     if(currentStep>=16){
       currentStep=0;
@@ -562,10 +627,11 @@ function scheduleStep(step,time){
     
     if(t===0){ // KICK
       engine.triggerDrum(time,currentDrumPreset,ev.vel||0.8,0);
-    } else if(t===1){ // BASS
+    } else if(t===1){ // BASS — rolling, follows root, updates state
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
-      const bassNote=musicalState.bassLastMidi+scale[(ev.note||0)%scale.length]-12;
-      engine.triggerSynth(time,bassNote,currentPreset.bass,stepDur*(ev.gate||0.5),1);
+      const bassNote=musicalState.bassLastMidi+scale[(ev.note||0)%scale.length];
+      engine.triggerSynth(time,bassNote,currentPreset.bass,stepDur*(currentPreset.bass.gate||0.4),1);
+      musicalState.bassLastMidi=bassNote;
     } else if(t===2){ // PERC
       const percPreset=LIB.drum.find(d=>d.type==='hatC')||currentDrumPreset;
       engine.triggerDrum(time,percPreset,ev.vel||0.5,2);
@@ -607,7 +673,14 @@ function initAudio(){
   audioCtx=new(window.AudioContext||window.webkitAudioContext)();
   engine=new PooledEngine(audioCtx);
   patterns=makePatterns(seed);
-  toast('AUDIO ENGINE INITIALIZED — '+SYNTH_VOICES+' synth + '+DRUM_VOICES+' drum voices pooled');
+  // Apply current knob values to engine FX
+  engine.setMasterGain(knobValues.volume/100);
+  engine.setDelayMix(knobValues.delay/100);
+  engine.setReverbMix(knobValues.reverb/100);
+  engine.setDrive(knobValues.drive/100);
+  engine.setFilterFreq(xyCutoff||18000);
+  engine.setFilterQ(xyRes||0.5);
+  toast('AUDIO ENGINE INITIALIZED — '+SYNTH_VOICES+' synth + '+DRUM_VOICES+' drum voices + FX chain');
 }
 
 function togglePlay(){
@@ -781,11 +854,14 @@ function updateSeqUI(){
 const KNOBS=[
   {id:'bpm',label:'BPM',min:60,max:200,val:145,fmt:v=>Math.round(v)},
   {id:'swing',label:'SWING',min:0,max:100,val:0,fmt:v=>Math.round(v)+'%'},
-  {id:'filter',label:'FILTER',min:100,max:8000,val:1500,fmt:v=>Math.round(v)+'Hz'},
+  {id:'filter',label:'FILTER',min:100,max:18000,val:1500,fmt:v=>v>=1000?(v/1000).toFixed(1)+'k':Math.round(v)+'Hz'},
   {id:'reso',label:'RESO',min:0,max:30,val:5,fmt:v=>v.toFixed(1)},
+  {id:'delay',label:'DELAY',min:0,max:100,val:22,fmt:v=>Math.round(v)+'%'},
+  {id:'reverb',label:'REVERB',min:0,max:100,val:18,fmt:v=>Math.round(v)+'%'},
+  {id:'drive',label:'DRIVE',min:0,max:100,val:15,fmt:v=>Math.round(v)+'%'},
   {id:'volume',label:'VOL',min:0,max:100,val:85,fmt:v=>Math.round(v)+'%'}
 ];
-let knobValues={bpm:145,swing:0,filter:1500,reso:5,volume:85};
+let knobValues={bpm:145,swing:0,filter:1500,reso:5,delay:22,reverb:18,drive:15,volume:85};
 
 function buildKnobs(){
   const row=document.getElementById('knobRow');
@@ -840,10 +916,14 @@ function updateKnob(k){
   knob.querySelector('.indicator').style.transform='translateX(-50%) rotate('+angle+'deg)';
   val.textContent=k.fmt(knobValues[k.id]);
   
-  // Apply values
+  // Apply values to engine
   if(k.id==='bpm'){currentBpm=knobValues[k.id];updateLCD()}
   else if(k.id==='swing'){currentSwing=knobValues[k.id]/100}
-  else if(k.id==='filter'){xyCutoff=knobValues[k.id];if(engine){/* apply to voices */}}
+  else if(k.id==='filter'){xyCutoff=knobValues[k.id];if(engine)engine.setFilterFreq(xyCutoff)}
+  else if(k.id==='reso'){xyRes=knobValues[k.id];if(engine)engine.setFilterQ(xyRes)}
+  else if(k.id==='delay'){if(engine)engine.setDelayMix(knobValues[k.id]/100)}
+  else if(k.id==='reverb'){if(engine)engine.setReverbMix(knobValues[k.id]/100)}
+  else if(k.id==='drive'){if(engine)engine.setDrive(knobValues[k.id]/100)}
   else if(k.id==='volume'){if(engine)engine.setMasterGain(knobValues[k.id]/100)}
 }
 
@@ -866,6 +946,8 @@ function initXYPad(){
     knobValues.reso=xyRes;
     updateKnob(KNOBS[2]);
     updateKnob(KNOBS[3]);
+    // Drive the actual master filter in real-time
+    if(engine){engine.setFilterFreq(xyCutoff);engine.setFilterQ(xyRes);}
   }
   
   let isDown=false;
