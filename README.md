@@ -64,6 +64,7 @@ Connect any MIDI controller:
 
     UI Layer        Knobs, XY Pad, Seq, Arranger, Pads
     Brain Layer     CandidateGenerator + Grammar System (3 grammars)
+    Persistence     localStorage (patterns, grammars, settings, auto-save)
     Scheduler       Swing, Section Arranger, Step Scheduler
     Engine Layer    PooledEngine (20 synth + 24 drum voices)
     FX Chain        Drive -> Filter -> [Delay, Reverb] -> Comp
@@ -77,6 +78,7 @@ Connect any MIDI controller:
 | 1.1 | MIDI guard + WAV export + GitHub Pages |
 | 1.2 | Master FX chain + swing fix + bass state tracking |
 | 1.3 | Grammar System + ADAPTIVE brain mode + grammar learning from performance |
+| 1.4 | State Persistence (localStorage) + RhythmGrammar integration + Save/Load project |
 
 ## License
 
