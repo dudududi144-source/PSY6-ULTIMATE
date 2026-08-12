@@ -81,6 +81,8 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
         <button onclick="reseed()">&#8635; VARIATION (V)</button>
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="recordLoop()">&#9679; REC (R)</button>
+        <button onclick="saveProject()">&#128190; SAVE</button>
+        <button onclick="loadProject()">&#128194; LOAD</button>
       </div>
       <div class="section-btns" id="sectionBtns"></div>
     </div>
@@ -727,9 +729,19 @@ function scheduleStep(step,time){
     const ev=pat[step];
     if(!ev.on)continue;
     
-    if(t===0){ // KICK
-      engine.triggerDrum(time,currentDrumPreset,ev.vel||0.8,0);
-      updateGrammars('kick',step,0);
+    if(t===0){ // KICK — ADAPTIVE uses learned rhythm grammar
+      let shouldPlay=ev.on;
+      if(brainMode==='ADAPTIVE'&&grammars.rhythm.kickCount.some(c=>c>0)){
+        const totalKicks=grammars.rhythm.kickCount.reduce((a,b)=>a+b,0);
+        if(totalKicks>8){
+          const prob=grammars.rhythm.kickOnset[step]/Math.max(grammars.rhythm.kickCount[step],1);
+          shouldPlay=rand()<Math.max(prob,0.1);
+        }
+      }
+      if(shouldPlay){
+        engine.triggerDrum(time,currentDrumPreset,ev.vel||0.8,0);
+        updateGrammars('kick',step,0);
+      }
     } else if(t===1){ // BASS — rolling, follows root, updates state + learns grammar
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
       let bassNote;
@@ -1281,6 +1293,106 @@ document.addEventListener('keydown',e=>{
 });
 
 // ============================================================
+// STATE PERSISTENCE — localStorage
+// ============================================================
+const STORAGE_KEY='psy6-ultimate-state';
+
+function serializeState(){
+  return {
+    version:'1.4',
+    seed:seed,
+    bpm:currentBpm,
+    swing:currentSwing,
+    genre:currentGenre,
+    scale:currentScale,
+    brainMode:brainMode,
+    variation:currentVariation,
+    knobValues:knobValues,
+    patterns:patterns,
+    grammars:{
+      bass:{transitions:grammars.bass.transitions,total:grammars.bass.total,lastPc:grammars.bass.lastPc},
+      melodic:{intervals:grammars.melodic.intervals,total:grammars.melodic.total,lastMidi:grammars.melodic.lastMidi,contourDir:grammars.melodic.contourDir},
+      rhythm:{kickOnset:grammars.rhythm.kickOnset,kickCount:grammars.rhythm.kickCount}
+    },
+    musicalState:musicalState,
+    savedAt:Date.now()
+  };
+}
+
+function saveProject(){
+  try{
+    const state=serializeState();
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+    toast('PROJECT SAVED — '+(grammars.bass.total+grammars.melodic.total)+' grammar entries preserved');
+  }catch(e){
+    toast('SAVE FAILED: '+e.message);
+  }
+}
+
+function loadProject(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw){toast('NO SAVED PROJECT FOUND');return}
+    const state=JSON.parse(raw);
+    // Restore core state
+    seed=state.seed||Date.now();
+    currentBpm=state.bpm||145;
+    currentSwing=state.swing||0;
+    currentGenre=state.genre||'PSYTRANCE';
+    currentScale=state.scale||'Phrygian Dominant';
+    brainMode=state.brainMode||'GENERATIVE';
+    currentVariation=state.variation||0;
+    // Restore knobs
+    if(state.knobValues){
+      Object.keys(state.knobValues).forEach(k=>{
+        if(knobValues.hasOwnProperty(k))knobValues[k]=state.knobValues[k];
+      });
+    }
+    // Restore patterns
+    if(state.patterns)patterns=state.patterns;
+    // Restore grammars
+    if(state.grammars){
+      if(state.grammars.bass){
+        grammars.bass.transitions=state.grammars.bass.transitions;
+        grammars.bass.total=state.grammars.bass.total;
+        grammars.bass.lastPc=state.grammars.bass.lastPc;
+      }
+      if(state.grammars.melodic){
+        grammars.melodic.intervals=state.grammars.melodic.intervals;
+        grammars.melodic.total=state.grammars.melodic.total;
+        grammars.melodic.lastMidi=state.grammars.melodic.lastMidi;
+        grammars.melodic.contourDir=state.grammars.melodic.contourDir;
+      }
+      if(state.grammars.rhythm){
+        grammars.rhythm.kickOnset=state.grammars.rhythm.kickOnset;
+        grammars.rhythm.kickCount=state.grammars.rhythm.kickCount;
+      }
+    }
+    // Restore musical state
+    if(state.musicalState)Object.assign(musicalState,state.musicalState);
+    // Update UI
+    updateSeqUI();updateLCD();updateBrainStatus();buildGenreChips();
+    KNOBS.forEach(k=>updateKnob(k));
+    const btn=document.getElementById('btnBrainMode');
+    if(btn)btn.innerHTML='&#129504; '+brainMode;
+    toast('PROJECT LOADED — '+(state.savedAt?new Date(state.savedAt).toLocaleTimeString():''));
+  }catch(e){
+    toast('LOAD FAILED: '+e.message);
+  }
+}
+
+// Auto-save every 30 seconds while playing
+let autoSaveInterval=null;
+function startAutoSave(){
+  if(autoSaveInterval)clearInterval(autoSaveInterval);
+  autoSaveInterval=setInterval(()=>{
+    if(isPlaying){
+      try{localStorage.setItem(STORAGE_KEY,JSON.stringify(serializeState()))}catch(e){}
+    }
+  },30000);
+}
+
+// ============================================================
 // INIT
 // ============================================================
 function init(){
@@ -1296,6 +1408,25 @@ function init(){
   initXYPad();
   initVisualizer();
   initMIDI();
+  
+  // Try to restore saved state
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const state=JSON.parse(raw);
+      if(state.grammars){
+        if(state.grammars.bass)grammars.bass=state.grammars.bass;
+        if(state.grammars.melodic)grammars.melodic=state.grammars.melodic;
+        if(state.grammars.rhythm)grammars.rhythm=state.grammars.rhythm;
+      }
+      if(state.musicalState)Object.assign(musicalState,state.musicalState);
+      updateBrainStatus();
+      console.log('Restored grammar state:',grammars.bass.total,'bass +',grammars.melodic.total,'melodic entries');
+    }
+  }catch(e){console.log('No saved state to restore')}
+  
+  // Auto-save while playing
+  startAutoSave();
   
   // Auto-update LCD
   setInterval(()=>{if(isPlaying)updateLCD()},200);
