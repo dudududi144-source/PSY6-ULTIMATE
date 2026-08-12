@@ -81,7 +81,8 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
         <button onclick="reseed()">&#8635; VARIATION (V)</button>
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="randomizeSound()">&#127922; SOUND</button>
-        <button onclick="recordLoop()">&#9679; REC (R)</button>
+        <button onclick="recordLoop()">&#9679; LOOP</button>
+        <button id="btnLiveRec" onclick="toggleLiveRecording()">&#128308; LIVE REC</button>
         <button onclick="saveProject(prompt('Project name:','my-groove')||'default')">&#128190; SAVE</button>
         <button onclick="loadProject()">&#128194; LOAD</button>
       </div>
@@ -122,6 +123,10 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
     <div class="panel">
       <div class="panel-title">SOUND SELECT</div>
       <div class="style-chips" id="presetChips"></div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="chip" onclick="exportPresets()">&#8681; EXPORT</button>
+        <button class="chip" onclick="importPresets()">&#8679; IMPORT</button>
+      </div>
     </div>
     <div class="panel">
       <div class="panel-title">PERFORMANCE PADS</div>
@@ -653,6 +658,9 @@ class PooledEngine{
     this.reverbMix.connect(this.comp);
     this.comp.connect(this.analyser);
     this.analyser.connect(ctx.destination);
+    // Recording destination (for live capture)
+    this.recDest=ctx.createMediaStreamDestination();
+    this.comp.connect(this.recDest);
     // Noise buffer
     const bufLen=ctx.sampleRate*2;
     this.noiseBuffer=ctx.createBuffer(1,bufLen,ctx.sampleRate);
@@ -1455,6 +1463,122 @@ function startAutoSave(){
       try{localStorage.setItem(STORAGE_KEY,JSON.stringify(serializeState()))}catch(e){}
     }
   },30000);
+}
+
+// ============================================================
+// LIVE RECORDING — MediaRecorder API
+// ============================================================
+let liveRecorder=null;
+let liveRecordingChunks=[];
+let isLiveRecording=false;
+let liveRecStartTime=0;
+
+function startLiveRecording(){
+  if(!audioCtx||!engine){toast('START AUDIO FIRST');return}
+  if(audioCtx.state==='suspended')audioCtx.resume();
+  try{
+    const stream=engine.recDest.stream;
+    // Prefer webm/opus, fallback to mp4
+    const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':
+               MediaRecorder.isTypeSupported('audio/mp4')?'audio/mp4':'';
+    liveRecorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);
+    liveRecordingChunks=[];
+    liveRecorder.ondataavailable=e=>{if(e.data.size>0)liveRecordingChunks.push(e.data)};
+    liveRecorder.onstop=()=>{
+      const blob=new Blob(liveRecordingChunks,{type:liveRecorder.mimeType||'audio/webm'});
+      const url=URL.createObjectURL(blob);
+      const dur=((Date.now()-liveRecStartTime)/1000).toFixed(1);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download='psy6-live-'+dur+'s-'+Date.now()+'.webm';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('LIVE RECORDING SAVED — '+dur+'s');
+    };
+    liveRecorder.start(250); // collect chunks every 250ms
+    isLiveRecording=true;
+    liveRecStartTime=Date.now();
+    updateRecButton();
+    toast('LIVE RECORDING STARTED');
+  }catch(e){
+    toast('REC FAILED: '+e.message);
+  }
+}
+
+function stopLiveRecording(){
+  if(liveRecorder&&liveRecorder.state!=='inactive'){
+    liveRecorder.stop();
+  }
+  isLiveRecording=false;
+  updateRecButton();
+}
+
+function toggleLiveRecording(){
+  if(isLiveRecording){stopLiveRecording()}
+  else{startLiveRecording()}
+}
+
+function updateRecButton(){
+  const btn=document.getElementById('btnLiveRec');
+  if(btn){
+    btn.innerHTML=isLiveRecording?'&#9724; STOP REC':'&#128308; LIVE REC';
+    btn.classList.toggle('active',isLiveRecording);
+    btn.style.color=isLiveRecording?'#ff3333':'';
+  }
+}
+
+// ============================================================
+// PRESET EXPORT / IMPORT
+// ============================================================
+function exportPresets(){
+  try{
+    const custom=LIB.bass.concat(LIB.lead).concat(LIB.arp).concat(LIB.pad).concat(LIB.pluck||[]).concat(LIB.fx||[]).filter(p=>p.id.startsWith('CUSTOM-'));
+    const data={
+      version:'1.6',
+      genre:currentGenre,
+      exportedAt:Date.now(),
+      presets:custom
+    };
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='psy6-presets-'+Date.now()+'.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('EXPORTED '+custom.length+' custom presets');
+  }catch(e){toast('EXPORT FAILED: '+e.message)}
+}
+
+function importPresets(){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='.json';
+  input.onchange=e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!data.presets||!Array.isArray(data.presets)){toast('INVALID PRESET FILE');return}
+        let imported=0;
+        data.presets.forEach(p=>{
+          if(p.id&&p.cat&&LIB[p.cat]){
+            // Avoid duplicates
+            if(!LIB[p.cat].find(x=>x.id===p.id)){
+              LIB[p.cat].push(p);
+              imported++;
+            }
+          }
+        });
+        buildPresetChips();
+        toast('IMPORTED '+imported+' presets');
+      }catch(err){toast('IMPORT FAILED: '+err.message)}
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ============================================================
