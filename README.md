@@ -106,6 +106,7 @@ Toggle with **📤 MIDI OUT** button:
 | 2.6 | Step Velocity Editing (right-click) + Section Patterns + Pad Octave Shift |
 | 2.7 | Humanization (probability + micro-timing) + MIDI Learn Mode + Preset Morpher |
 | 2.8 | Pattern Nudge + Track Volume controls + Preset Favorites |
+| 2.9 | Help Panel (shortcut reference) + Pattern Duplicate |
 
 ## License
 
