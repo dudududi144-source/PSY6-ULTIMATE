@@ -367,9 +367,9 @@ function randInt(min,max){return Math.floor(rand()*(max-min+1))+min}
 function pick(arr){return arr[Math.floor(rand()*arr.length)]}
 
 // --- Utility ---
-function toast(msg,ms){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms||2000)}
-function midiToFreq(m){return 440*Math.pow(2,(m-69)/12)}
-function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function toast(msg,ms){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms||2000)}
+function midiToFreq(m){if(isNaN(m))return 440;return 440*Math.pow(2,(clamp(m,0,127)-69)/12)}
+function clamp(v,min,max){if(isNaN(v))return min;return Math.max(min,Math.min(max,v))}
 
 // ============================================================
 // FACTORY PRESETS
@@ -437,17 +437,17 @@ function makePatterns(s){
   rng=mulberry32(s);
   const p={kick:[],bass:[],perc:[],lead:[],arp:[],pad:[]};
   // Kick: four-on-floor with variations
-  p.kick=Array.from({length:16},(_,i)=>({on:i%4===0||(rand()<0.15),vel:0.8+rand()*0.2}));
+  p.kick=Array.from({length:16},(_,i)=>({on:i%4===0||(rand()<0.15),vel:0.8+rand()*0.2,prob:1.0,repeat:1}));
   // Bass: rolling psytrance pattern (K-B-B-B)
-  p.bass=Array.from({length:16},(_,i)=>({on:i%4!==0&&(rand()<0.85),vel:0.6+rand()*0.3,note:0}));
+  p.bass=Array.from({length:16},(_,i)=>({on:i%4!==0&&(rand()<0.85),vel:0.6+rand()*0.3,note:0,prob:1.0,repeat:1}));
   // Perc: offbeat hats + ghost notes
-  p.perc=Array.from({length:16},(_,i)=>({on:(i%4===2)||(rand()<0.3),vel:0.4+rand()*0.4}));
+  p.perc=Array.from({length:16},(_,i)=>({on:(i%4===2)||(rand()<0.3),vel:0.4+rand()*0.4,prob:1.0,repeat:1}));
   // Lead: sparse melodic hits
-  p.lead=Array.from({length:16},(_,i)=>({on:rand()<0.35,vel:0.5+rand()*0.4,note:randInt(0,6)}));
+  p.lead=Array.from({length:16},(_,i)=>({on:rand()<0.35,vel:0.5+rand()*0.4,note:randInt(0,6),prob:1.0,repeat:1}));
   // Arp: 16th note arpeggios
-  p.arp=Array.from({length:16},(_,i)=>({on:rand()<0.7,vel:0.4+rand()*0.3,note:i%7}));
+  p.arp=Array.from({length:16},(_,i)=>({on:rand()<0.7,vel:0.4+rand()*0.3,note:i%7,prob:1.0,repeat:1}));
   // Pad: sustained chords on downbeats
-  p.pad=Array.from({length:16},(_,i)=>({on:i===0,vel:0.5,note:0}));
+  p.pad=Array.from({length:16},(_,i)=>({on:i===0,vel:0.5,note:0,prob:1.0,repeat:1}));
   return p;
 }
 
@@ -946,7 +946,9 @@ class PooledEngine{
     this.spawnCount++;
   }
   makeImpulse(dur,decay){
-    const len=this.ctx.sampleRate*dur;
+    if(!dur||dur<=0)dur=1;
+    if(!decay||decay<=0)decay=2;
+    const len=Math.max(1,Math.floor(this.ctx.sampleRate*dur));
     const buf=this.ctx.createBuffer(2,len,this.ctx.sampleRate);
     for(let ch=0;ch<2;ch++){
       const d=buf.getChannelData(ch);
@@ -1046,6 +1048,7 @@ function scheduleStep(step,time){
   for(let t=0;t<6;t++){
     if(trackMutes[t])continue;
     if(anySolo&&!trackSolos[t])continue; // only play soloed tracks
+    if(!patterns[trackNames[t]])continue; // guard against missing patterns
     const trackName=trackNames[t];
     const pat=patterns[trackName];
     if(!pat||!pat[step])continue;
@@ -1275,6 +1278,12 @@ function recordLoop(){
 }
 
 function audioBufferToWav(buffer){
+  if(!buffer||buffer.length===0){
+    // Return minimal valid WAV header
+    const ab=new ArrayBuffer(44);
+    const view=new DataView(ab);
+    return ab;
+  }
   const numCh=buffer.numberOfChannels;
   const sr=buffer.sampleRate;
   const len=buffer.length*numCh*2+44;
@@ -1618,8 +1627,10 @@ function buildPresetChips(){
 // --- Performance Pads ---
 function buildPads(){
   const grid=document.getElementById('padsGrid');
+  if(!grid)return;
   grid.innerHTML='';
   const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+  if(!scale||scale.length===0)return;
   for(let i=0;i<8;i++){
     const pad=document.createElement('div');
     pad.className='pad';
@@ -2254,14 +2265,18 @@ function generateChordProgression(){
 }
 
 function advanceChord(){
+  if(!currentChordProgression||currentChordProgression.length===0)return;
   currentChordIndex=(currentChordIndex+1)%currentChordProgression.length;
   const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+  if(!scale||scale.length===0)return;
   const degree=currentChordProgression[currentChordIndex];
   currentChordRoot=scale[degree%scale.length];
 }
 
 function getCurrentChordNotes(){
   const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+  if(!scale||scale.length===0)return[0,4,7]; // fallback to major triad
+  if(!currentChordProgression||currentChordProgression.length===0)return[scale[0],scale[2]||scale[0],scale[4]||scale[0]];
   const degree=currentChordProgression[currentChordIndex];
   const root=scale[degree%scale.length];
   // Build triad from scale degrees: root, +2, +4 (within scale)
