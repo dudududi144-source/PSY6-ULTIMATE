@@ -1223,6 +1223,11 @@ function stopEngine(){
   clearInterval(schedulerInterval);
   if(engine)engine.killAll();
   currentStep=0;currentBar=0;currentSection=0;
+  // Reset transient state
+  fillActive=false;fillStepsRemaining=0;
+  bpmRampActive=false;
+  evolveCounter=0;
+  randomWalkCounter=0;
   document.getElementById('btnPlay').classList.remove('active');
   document.getElementById('btnPlay').innerHTML='&#9654; PLAY';
   document.getElementById('statusText').textContent='STOPPED';
@@ -1830,6 +1835,7 @@ function initVisualizer(){
 // ============================================================
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(document.activeElement&&document.activeElement.tagName==='INPUT')return;
   switch(e.key){
     case ' ':e.preventDefault();togglePlay();break;
     case 'v':case 'V':reseed();break;
@@ -2284,6 +2290,7 @@ function getArpNote(step){
     case 'DOWN':
       return arpSeq[(len-1-(step%len))];
     case 'UP-DOWN':
+      if(len<=1)return arpSeq[0]||60;
       const cycle=step%(len*2-2);
       const idx=cycle<len?cycle:(len*2-2-cycle);
       return arpSeq[idx];
@@ -2626,7 +2633,8 @@ function morphPresets(cat){
   if(presets.length<2){toast('NEED 2+ PRESETS TO MORPH');return}
   const a=pick(presets);
   let b=pick(presets);
-  while(b.id===a.id&&presets.length>1)b=pick(presets);
+  let attempts=0;
+  while(b.id===a.id&&presets.length>1&&attempts<20){b=pick(presets);attempts++;}
   
   // Blend numeric parameters
   const blend=0.5;
@@ -2974,6 +2982,7 @@ function togglePresetChain(){
 
 function applyPresetChain(){
   if(!presetChainEnabled)return;
+  if(presetChainIndex>10000)presetChainIndex=0; // prevent overflow
   const cats=['bass','lead','arp','pad'];
   const cat=cats[presetChainIndex%4];
   const options=LIB[cat].filter(p=>p.genre===currentGenre);
@@ -3062,6 +3071,7 @@ function toggleAutoMorph(){
 function checkAutoMorph(){
   if(!autoMorphEnabled)return;
   autoMorphCounter++;
+  if(autoMorphCounter>10000)autoMorphCounter=0; // prevent overflow
   if(autoMorphCounter>=8){
     autoMorphCounter=0;
     const cat=pick(['bass','lead','arp','pad']);
@@ -3447,7 +3457,7 @@ function cycleTrackPan(trackIdx){
     if(!engine.trackPanners){engine.trackPanners=[]}
     if(!engine.trackPanners[trackIdx]){
       const panner=audioCtx.createStereoPanner();
-      engine.trackBuses[trackIdx].disconnect();
+      try{engine.trackBuses[trackIdx].disconnect()}catch(e){}
       engine.trackBuses[trackIdx].connect(panner);
       panner.connect(engine.master);
       engine.trackPanners[trackIdx]=panner;
@@ -3622,12 +3632,11 @@ function toggleTrackCompressor(trackIdx){
     // Toggle: connect/disconnect compressor
     const bus=engine.trackBuses[trackIdx];
     const comp=engine.trackCompressorNodes[trackIdx];
+    try{bus.disconnect()}catch(e){}
     if(trackCompressors[trackIdx]){
-      bus.disconnect();
       bus.connect(comp);
       comp.connect(engine.master);
     } else {
-      bus.disconnect();
       bus.connect(engine.master);
     }
   }
@@ -3651,6 +3660,7 @@ function toggleRandomWalk(){
 function checkRandomWalk(){
   if(!randomWalkEnabled)return;
   randomWalkCounter++;
+  if(randomWalkCounter>10000)randomWalkCounter=0; // prevent overflow
   if(randomWalkCounter>=2){
     randomWalkCounter=0;
     // Pick a random category and move to a nearby preset
