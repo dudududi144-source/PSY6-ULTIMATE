@@ -108,6 +108,7 @@ Toggle with **📤 MIDI OUT** button:
 | 2.8 | Pattern Nudge + Track Volume controls + Preset Favorites |
 | 2.9 | Help Panel (shortcut reference) + Pattern Duplicate |
 | 3.0 | Preset Search + Global Quantize + BPM Automation per section |
+| 3.1 | Pattern Rotate (double-click M) + Randomize All Presets + Section Length Control |
 
 ## License
 
