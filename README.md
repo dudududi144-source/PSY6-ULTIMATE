@@ -115,6 +115,7 @@ Toggle with **📤 MIDI OUT** button:
 | 3.5 | Pattern Merge (;) + Preset History + Step Probability (shift+right-click) |
 | 3.6 | Pattern Invert (0) + Preset Clone (C) + Track FX Modes (N/D/W/P per track) |
 | 3.7 | Pattern Stretch/Compress (7/8) + Track Delay Offset + Preset Blend (9) |
+| 3.8 | BPM Ramp (5/6) + Mute Groups (DRUMS/SYNTHS) + Preset Evolve (4) |
 
 ## License
 
