@@ -85,6 +85,9 @@ body.perf-mode .knob{width:72px;height:72px}
       <div class="transport">
         <button id="btnPlay" onclick="togglePlay()">&#9654; PLAY</button>
         <button onclick="stopEngine()">&#9632; STOP</button>
+        <button onclick="tapTempo()">&#128433; TAP (T)</button>
+        <button onclick="toggleSectionLoop()" id="btnLoop">&#128257; LOOP (L)</button>
+        <button onclick="undoSequencer()">&#8630; UNDO (U)</button>
         <button onclick="reseed()">&#8635; VARIATION (V)</button>
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="randomizeSound()">&#127922; SOUND</button>
@@ -277,6 +280,12 @@ let midiClockDetectedBpm=0;
 // MIDI Output state
 let midiOutput=null;
 let midiOutEnabled=false;
+// Tap Tempo state
+let tapTimes=[];
+// Section Loop state
+let sectionLoopEnabled=false;
+// Sequencer undo stack
+let undoStack=[];
 let currentPreset={bass:LIB.bass[0],lead:LIB.lead[0],arp:LIB.arp[0],pad:LIB.pad[0]};
 let currentDrumPreset=LIB.drum[0];
 
@@ -858,8 +867,11 @@ function scheduler(){
       const sectionBars=SECTION_BARS[SECTIONS[currentSection]]||8;
       if(currentBar>=sectionBars){
         currentBar=0;
-        currentSection=(currentSection+1)%SECTIONS.length;
-        onSectionChange();
+        if(!sectionLoopEnabled){
+          currentSection=(currentSection+1)%SECTIONS.length;
+          onSectionChange();
+        }
+        // If sectionLoopEnabled, stay on current section (bar resets to 0)
       }
       // Generate new candidates every 4 bars in GENERATIVE mode
       if(brainMode==='GENERATIVE'&&currentBar%4===0){
@@ -1135,6 +1147,7 @@ function updateSeqUI(){
       step.dataset.track=t;
       step.onclick=()=>{
         if(!patterns[patternKeys[t]])return;
+        pushUndo(); // Save state before edit
         patterns[patternKeys[t]][s].on=!patterns[patternKeys[t]][s].on;
         step.classList.toggle('active');
       };
@@ -1511,6 +1524,9 @@ document.addEventListener('keydown',e=>{
     case 'h':case 'H':applyBestCandidate();toast('MELODY generated');break;
     case 'z':case 'Z':patterns.arp=makePatterns(seed+1).arp;updateSeqUI();toast('ARP pattern regenerated');break;
     case 'a':case 'A':cycleArpMode();break;
+    case 't':case 'T':tapTempo();break;
+    case 'l':case 'L':toggleSectionLoop();break;
+    case 'u':case 'U':undoSequencer();break;
     case 'r':case 'R':recordLoop();break;
     case 's':case 'S':randomizeSound();break;
     case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':
@@ -2058,6 +2074,67 @@ function importSong(){
     reader.readAsText(file);
   };
   input.click();
+}
+
+// ============================================================
+// TAP TEMPO — Set BPM by tapping
+// ============================================================
+function tapTempo(){
+  const now=performance.now();
+  // Reset if gap > 2 seconds
+  if(tapTimes.length>0&&now-tapTimes[tapTimes.length-1]>2000){
+    tapTimes=[];
+  }
+  tapTimes.push(now);
+  // Keep last 8 taps
+  if(tapTimes.length>8)tapTimes.shift();
+  // Need at least 3 taps to calculate BPM
+  if(tapTimes.length>=3){
+    const intervals=[];
+    for(let i=1;i<tapTimes.length;i++){
+      intervals.push(tapTimes[i]-tapTimes[i-1]);
+    }
+    const avgInterval=intervals.reduce((a,b)=>a+b,0)/intervals.length;
+    const bpm=clamp(Math.round(60000/avgInterval),60,200);
+    currentBpm=bpm;
+    knobValues.bpm=bpm;
+    updateKnob(KNOBS[0]);
+    updateLCD();
+    toast('TAP TEMPO: '+bpm+' BPM ('+tapTimes.length+' taps)');
+  } else {
+    toast('TAP '+tapTimes.length+'/3...');
+  }
+}
+
+// ============================================================
+// SECTION LOOP — Loop current section
+// ============================================================
+function toggleSectionLoop(){
+  sectionLoopEnabled=!sectionLoopEnabled;
+  const btn=document.getElementById('btnLoop');
+  if(btn)btn.classList.toggle('active',sectionLoopEnabled);
+  toast('SECTION LOOP: '+(sectionLoopEnabled?'ON — looping '+SECTIONS[currentSection]:'OFF'));
+}
+
+// ============================================================
+// SEQUENCER UNDO — Undo step edits
+// ============================================================
+function pushUndo(){
+  // Deep copy current patterns
+  const snapshot=JSON.parse(JSON.stringify(patterns));
+  undoStack.push(snapshot);
+  // Keep last 20 states
+  if(undoStack.length>20)undoStack.shift();
+}
+
+function undoSequencer(){
+  if(undoStack.length===0){
+    toast('NOTHING TO UNDO');
+    return;
+  }
+  patterns=undoStack.pop();
+  updateSeqUI();
+  toast('UNDO ('+undoStack.length+' states left)');
 }
 
 // ============================================================
