@@ -956,13 +956,18 @@ function scheduler(){
       checkPresetEvolve();
       // Update BPM ramp
       updateBPMRamp();
+      // Check random walk
+      checkRandomWalk();
       // Check section advancement
       const sectionBars=SECTION_BARS[SECTIONS[currentSection]]||8;
       if(currentBar>=sectionBars){
         currentBar=0;
         if(!sectionLoopEnabled){
-          currentSection=(currentSection+1)%SECTIONS.length;
-          onSectionChange();
+          // Check if we should repeat the current section
+          if(!shouldRepeatSection()){
+            currentSection=(currentSection+1)%SECTIONS.length;
+            onSectionChange();
+          }
         }
         // If sectionLoopEnabled, stay on current section (bar resets to 0)
       }
@@ -1809,6 +1814,9 @@ document.addEventListener('keydown',e=>{
     case 'escape':toggleTransitionFX();break;
     case 'delete':savePresetSnapshot();break;
     case 'insert':loadPresetSnapshot();break;
+    case 'home':cycleSectionRepeat();break;
+    case 'end':toggleTrackCompressor(3);break; // toggle LEAD compressor
+    case 'pageup':toggleRandomWalk();break;
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -3492,6 +3500,117 @@ function loadPresetSnapshot(){
   if(snapshot.pad)currentPreset.pad=snapshot.pad;
   buildPresetChips();
   toast('PRESET SNAPSHOT LOADED');
+}
+
+// ============================================================
+// SECTION REPEAT — Repeat current section N times
+// ============================================================
+let sectionRepeatCount=0;
+let sectionRepeatTarget=0;
+let sectionRepeatOriginal=0;
+
+function setSectionRepeat(count){
+  sectionRepeatTarget=count;
+  sectionRepeatCount=0;
+  sectionRepeatOriginal=currentSection;
+  toast('SECTION REPEAT: '+SECTIONS[currentSection]+' x'+count);
+}
+
+function cycleSectionRepeat(){
+  const repeatLevels=[0,1,2,4];
+  const currentIdx=repeatLevels.indexOf(sectionRepeatTarget);
+  const nextIdx=(currentIdx+1)%repeatLevels.length;
+  const newCount=repeatLevels[nextIdx];
+  if(newCount===0){
+    sectionRepeatTarget=0;
+    sectionRepeatCount=0;
+    toast('SECTION REPEAT: OFF');
+  } else {
+    setSectionRepeat(newCount);
+  }
+}
+
+// Check if we should repeat the current section
+function shouldRepeatSection(){
+  if(sectionRepeatTarget===0)return false;
+  if(sectionRepeatCount<sectionRepeatTarget){
+    sectionRepeatCount++;
+    return true;
+  }
+  // Reset after completing repeats
+  sectionRepeatTarget=0;
+  sectionRepeatCount=0;
+  return false;
+}
+
+// ============================================================
+// TRACK COMPRESSOR — Per-track dynamics control
+// ============================================================
+let trackCompressors=[false,false,false,false,false,false];
+
+function toggleTrackCompressor(trackIdx){
+  if(!audioCtx)initAudio();
+  trackCompressors[trackIdx]=!trackCompressors[trackIdx];
+  
+  if(engine&&engine.trackBuses[trackIdx]){
+    if(!engine.trackCompressorNodes){engine.trackCompressorNodes=[]}
+    if(!engine.trackCompressorNodes[trackIdx]){
+      const comp=audioCtx.createDynamicsCompressor();
+      comp.threshold.value=-12;
+      comp.knee.value=10;
+      comp.ratio.value=4;
+      comp.attack.value=0.005;
+      comp.release.value=0.1;
+      engine.trackCompressorNodes[trackIdx]=comp;
+    }
+    // Toggle: connect/disconnect compressor
+    const bus=engine.trackBuses[trackIdx];
+    const comp=engine.trackCompressorNodes[trackIdx];
+    if(trackCompressors[trackIdx]){
+      bus.disconnect();
+      bus.connect(comp);
+      comp.connect(engine.master);
+    } else {
+      bus.disconnect();
+      bus.connect(engine.master);
+    }
+  }
+  
+  const trackNames=['KICK','BASS','PERC','LEAD','ARP','PAD'];
+  toast(trackNames[trackIdx]+' COMPRESSOR: '+(trackCompressors[trackIdx]?'ON':'OFF'));
+}
+
+// ============================================================
+// PRESET RANDOM WALK — Evolve through preset space gradually
+// ============================================================
+let randomWalkEnabled=false;
+let randomWalkCounter=0;
+
+function toggleRandomWalk(){
+  randomWalkEnabled=!randomWalkEnabled;
+  randomWalkCounter=0;
+  toast('PRESET RANDOM WALK: '+(randomWalkEnabled?'ON — walking every 2 bars':'OFF'));
+}
+
+function checkRandomWalk(){
+  if(!randomWalkEnabled)return;
+  randomWalkCounter++;
+  if(randomWalkCounter>=2){
+    randomWalkCounter=0;
+    // Pick a random category and move to a nearby preset
+    const cats=['bass','lead','arp','pad'];
+    const cat=pick(cats);
+    const options=LIB[cat].filter(function(p){return p.genre===currentGenre});
+    if(options.length>1){
+      const currentIdx=options.findIndex(function(p){return currentPreset[cat]&&p.id===currentPreset[cat].id});
+      // Move to adjacent preset (random walk)
+      const step=pick([-1,1]);
+      const newIdx=(currentIdx+step+options.length)%options.length;
+      currentPreset[cat]=options[newIdx];
+      addToPresetHistory(options[newIdx]);
+      buildPresetChips();
+    }
+  }
 }
 
 // ============================================================
