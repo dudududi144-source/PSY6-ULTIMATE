@@ -306,6 +306,8 @@ body.perf-mode .knob{width:72px;height:72px}
 const SYNTH_VOICES = 20;
 const DRUM_VOICES = 24;
 const SECTIONS = ['INTRO','BUILD','DROP','BREAK','RISER','DROP2','LOOP'];
+const TRACK_NAMES_KEYS = ['kick','bass','perc','lead','arp','pad'];
+const TRACK_NAMES_DISPLAY = ['KICK','BASS','PERC','LEAD','ARP','PAD'];
 const SECTION_BARS = {INTRO:8,BUILD:8,DROP:16,BREAK:8,RISER:4,DROP2:16,LOOP:8};
 const GENRES = ['PSYTRANCE','TECHNO','TRANCE','PROGRESSIVE'];
 const SCALES = {
@@ -1057,7 +1059,7 @@ function scheduler(){
 }
 
 function scheduleStep(step,time){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const stepDur=60/currentBpm/4;
   // Humanize: apply micro-timing (except kick to keep groove solid)
   const humanTime=getHumanizedTime(time);
@@ -1266,7 +1268,7 @@ function recordLoop(){
   const offline=new OfflineAudioContext(2,audioCtx.sampleRate*totalDur,audioCtx.sampleRate);
   const offEngine=new PooledEngine(offline);
   let t=0.1;
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   for(let bar=0;bar<barsToRecord;bar++){
     for(let step=0;step<16;step++){
       for(let tr=0;tr<6;tr++){
@@ -1363,7 +1365,7 @@ function updateSeqUI(){
   const grid=document.getElementById('seqGrid');
   if(!grid)return;
   grid.innerHTML='';
-  const trackNames=['KICK','BASS','PERC','LEAD','ARP','PAD'];
+  const trackNames=TRACK_NAMES_DISPLAY;
   const patternKeys=['kick','bass','perc','lead','arp','pad'];
   
   for(let t=0;t<6;t++){
@@ -1843,8 +1845,14 @@ function initVisualizer(){
     waveCanvas.width=waveCanvas.offsetWidth;
     waveCanvas.height=waveCanvas.offsetHeight;
   }
+  // Debounced resize handler
+  let resizeTimeout=null;
+  function debouncedResize(){
+    if(resizeTimeout)clearTimeout(resizeTimeout);
+    resizeTimeout=setTimeout(resize,150);
+  }
   resize();
-  window.addEventListener('resize',resize);
+  window.addEventListener('resize',debouncedResize);
   
   const freqData=new Uint8Array(128);
   const timeData=new Uint8Array(256);
@@ -2733,7 +2741,7 @@ function morphPresets(cat){
 // PATTERN NUDGE — Shift pattern left/right
 // ============================================================
 function nudgeTrack(trackIdx,direction){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!patterns[trackName])return;
   pushUndo();
@@ -2752,7 +2760,7 @@ function nudgeTrack(trackIdx,direction){
 // Nudge all tracks at once
 function nudgeAll(direction){
   pushUndo();
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   trackNames.forEach(name=>{
     if(!patterns[name])return;
     const arr=patterns[name];
@@ -2811,7 +2819,7 @@ function toggleHelp(){
 // PATTERN DUPLICATE — Copy pattern to next track
 // ============================================================
 function duplicatePattern(trackIdx){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   if(trackIdx>=trackNames.length-1)return;
   const src=trackNames[trackIdx];
   const dst=trackNames[trackIdx+1];
@@ -2830,7 +2838,7 @@ function duplicatePattern(trackIdx){
 // ============================================================
 function quantizePatterns(){
   pushUndo();
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   let changes=0;
   trackNames.forEach(name=>{
     if(!patterns[name])return;
@@ -2879,7 +2887,7 @@ function applySectionBPM(){
 // PATTERN ROTATE — Rotate a single track's pattern
 // ============================================================
 function rotateTrackPattern(trackIdx,direction){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!patterns[trackName])return;
   pushUndo();
@@ -2929,7 +2937,7 @@ function adjustSectionLength(delta){
 // PATTERN VARIATION GENERATOR — Mutate patterns musically
 // ============================================================
 function generateTrackVariation(trackIdx){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!patterns[trackName])return;
   pushUndo();
@@ -2954,7 +2962,7 @@ function generateTrackVariation(trackIdx){
 // Generate variations for all tracks at once
 function generateAllVariations(){
   pushUndo();
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   trackNames.forEach((name,idx)=>{
     if(!patterns[name])return;
     const arr=patterns[name];
@@ -3004,7 +3012,7 @@ function toggleScaleLock(){
 // PATTERN COPY/PASTE — Copy pattern between tracks
 // ============================================================
 function copyTrackPattern(trackIdx){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!patterns[trackName])return;
   clipboardPattern=JSON.parse(JSON.stringify(patterns[trackName]));
@@ -3013,7 +3021,7 @@ function copyTrackPattern(trackIdx){
 }
 
 function pasteTrackPattern(trackIdx){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!clipboardPattern||!patterns[trackName])return;
   pushUndo();
@@ -3054,7 +3062,7 @@ function applyPresetChain(){
 // STEP REPEAT — Repeat a step multiple times within the bar
 // ============================================================
 function addStepRepeat(trackIdx,stepIdx){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!patterns[trackName])return;
   pushUndo();
@@ -3071,7 +3079,7 @@ function addStepRepeat(trackIdx,stepIdx){
 // PATTERN SWAP — Exchange patterns between two tracks
 // ============================================================
 function swapTrackPatterns(trackIdx1,trackIdx2){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const name1=trackNames[trackIdx1];
   const name2=trackNames[trackIdx2];
   if(!patterns[name1]||!patterns[name2])return;
@@ -3140,7 +3148,7 @@ function checkAutoMorph(){
 // PATTERN MERGE — Combine two patterns with OR logic
 // ============================================================
 function mergeTrackPatterns(trackIdx1,trackIdx2){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const name1=trackNames[trackIdx1];
   const name2=trackNames[trackIdx2];
   if(!patterns[name1]||!patterns[name2])return;
@@ -3188,7 +3196,7 @@ function showPresetHistory(){
 // STEP PROBABILITY — Per-step play probability
 // ============================================================
 function cycleStepProbability(trackIdx,stepIdx){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!patterns[trackName])return;
   pushUndo();
@@ -3206,7 +3214,7 @@ function cycleStepProbability(trackIdx,stepIdx){
 // PATTERN INVERT — Flip on/off states
 // ============================================================
 function invertTrackPattern(trackIdx){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!patterns[trackName])return;
   pushUndo();
@@ -3221,7 +3229,7 @@ function invertTrackPattern(trackIdx){
 // Invert all tracks
 function invertAllPatterns(){
   pushUndo();
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   trackNames.forEach(name=>{
     if(!patterns[name])return;
     for(let i=0;i<16;i++){
@@ -3273,7 +3281,7 @@ let trackFxModes=[0,0,0,0,0,0]; // index into TRACK_FX_MODES per track
 function cycleTrackFxMode(trackIdx){
   trackFxModes[trackIdx]=(trackFxModes[trackIdx]+1)%TRACK_FX_MODES.length;
   const mode=TRACK_FX_MODES[trackFxModes[trackIdx]];
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   
   if(engine){
     switch(mode){
@@ -3306,7 +3314,7 @@ function cycleTrackFxMode(trackIdx){
 // PATTERN STRETCH/COMPRESS — Time-stretch a pattern
 // ============================================================
 function stretchTrackPattern(trackIdx,factor){
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const trackName=trackNames[trackIdx];
   if(!patterns[trackName])return;
   pushUndo();
@@ -3347,7 +3355,7 @@ let trackDelayOffsets=[0,0,0,0,0,0]; // in seconds
 
 function adjustTrackDelayOffset(trackIdx,delta){
   trackDelayOffsets[trackIdx]=clamp(trackDelayOffsets[trackIdx]+delta,-0.03,0.03);
-  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackNames=TRACK_NAMES_KEYS;
   const ms=Math.round(trackDelayOffsets[trackIdx]*1000);
   toast(trackNames[trackIdx].toUpperCase()+' OFFSET: '+(ms>=0?'+':'')+ms+'ms');
 }
@@ -3522,7 +3530,7 @@ function cycleTrackPan(trackIdx){
     engine.trackPanners[trackIdx].pan.value=trackPans[trackIdx];
   }
   
-  const trackNames=['KICK','BASS','PERC','LEAD','ARP','PAD'];
+  const trackNames=TRACK_NAMES_DISPLAY;
   const panLabel=trackPans[trackIdx]===0?'C':(trackPans[trackIdx]<0?'L'+Math.round(Math.abs(trackPans[trackIdx])*100):'R'+Math.round(trackPans[trackIdx]*100));
   toast(trackNames[trackIdx]+' PAN: '+panLabel);
 }
@@ -3698,7 +3706,7 @@ function toggleTrackCompressor(trackIdx){
     }
   }
   
-  const trackNames=['KICK','BASS','PERC','LEAD','ARP','PAD'];
+  const trackNames=TRACK_NAMES_DISPLAY;
   toast(trackNames[trackIdx]+' COMPRESSOR: '+(trackCompressors[trackIdx]?'ON':'OFF'));
 }
 
