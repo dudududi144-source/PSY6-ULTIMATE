@@ -64,6 +64,12 @@ Connect any MIDI controller:
 - **CC 28** -> SPACE macro (reverb + delay + filter)
 - **CC 29** -> ENERGY macro (drive + volume + filter)
 - **CC 30** -> TENSION macro (filter + reso + swing)
+
+### MIDI Out
+Toggle with **📤 MIDI OUT** button:
+- Sends LEAD notes to external synth
+- Sends MIDI Clock (0xF8) for tempo sync
+- First available MIDI output port is used
 - **MIDI Clock** (0xF8) -> External tempo sync (toggle with CLOCK button)
 - **MIDI Start/Stop** (0xFA/0xFC) -> Transport control when clock enabled
 
@@ -93,6 +99,7 @@ Connect any MIDI controller:
 | 1.9 | Grammar Decay (adaptive forgetting) + Grammar Visualization |
 | 2.0 | Chord Progression Engine (7 progressions, per-bar changes, bass anchoring) |
 | 2.1 | Chord-aware Arpeggiator (5 modes: UP/DOWN/UP-DOWN/RANDOM/CHORD) |
+| 2.2 | MIDI Out (notes + clock to external gear) + Track Solo |
 
 ## License
 
