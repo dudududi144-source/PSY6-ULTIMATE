@@ -49,6 +49,7 @@ The instrument builds statistical models in real-time:
 | Z | Generate arpeggio |
 | R | Record + Export WAV (4 bars) |
 | S | Sound design randomizer |
+| A | Cycle arpeggiator mode |
 | 1-8 | Jump to section |
 
 ## Control Knobs
@@ -91,6 +92,7 @@ Connect any MIDI controller:
 | 1.8 | Macro Controls (SPACE/ENERGY/TENSION) + Performance Mode |
 | 1.9 | Grammar Decay (adaptive forgetting) + Grammar Visualization |
 | 2.0 | Chord Progression Engine (7 progressions, per-bar changes, bass anchoring) |
+| 2.1 | Chord-aware Arpeggiator (5 modes: UP/DOWN/UP-DOWN/RANDOM/CHORD) |
 
 ## License
 
