@@ -103,6 +103,7 @@ Toggle with **📤 MIDI OUT** button:
 | 2.3 | Per-track FX Sends (delay/reverb per track) + Song Export/Import |
 | 2.4 | Tap Tempo + Section Loop + Sequencer Undo (T/L/U shortcuts) |
 | 2.5 | Bass Pattern Modes (4 modes) + Fill Generator + Energy Automation |
+| 2.6 | Step Velocity Editing (right-click) + Section Patterns + Pad Octave Shift |
 
 ## License
 
