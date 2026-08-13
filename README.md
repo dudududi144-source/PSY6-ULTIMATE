@@ -119,6 +119,7 @@ Toggle with **📤 MIDI OUT** button:
 | 3.9 | Track Pan (per-track stereo) + Section Transition FX (riser/impact) + Preset Snapshot |
 | 4.0 | Section Repeat (Home) + Track Compressor (End) + Preset Random Walk (PageUp) |
 | 4.1 | Help Panel updated with all 46 shortcuts + mouse controls + MIDI map |
+| 4.2 | Bug fixes: keydown guard, disconnect safety, state resets, overflow protection, div-by-zero, infinite loop |
 
 ## License
 
