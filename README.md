@@ -118,6 +118,7 @@ Toggle with **📤 MIDI OUT** button:
 | 3.8 | BPM Ramp (5/6) + Mute Groups (DRUMS/SYNTHS) + Preset Evolve (4) |
 | 3.9 | Track Pan (per-track stereo) + Section Transition FX (riser/impact) + Preset Snapshot |
 | 4.0 | Section Repeat (Home) + Track Compressor (End) + Preset Random Walk (PageUp) |
+| 4.1 | Help Panel updated with all 46 shortcuts + mouse controls + MIDI map |
 
 ## License
 
