@@ -122,6 +122,7 @@ Toggle with **📤 MIDI OUT** button:
 | 4.2 | Bug fixes: keydown guard, disconnect safety, state resets, overflow protection, div-by-zero, infinite loop |
 | 4.3 | Deep bug fixes: pattern fields, empty scale/progression guards, NaN handling, null checks, empty buffer handling |
 | 4.4 | MIDI hot-plug detection, AudioContext resume, envelope overlap prevention (synth + drum) |
+| 4.5 | Song export deep copy, genre fallback, UI null checks (5 functions), BPM bounds (MIDI clock + ramp) |
 
 ## License
 
