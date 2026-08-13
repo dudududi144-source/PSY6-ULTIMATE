@@ -167,6 +167,9 @@ body.perf-mode .knob{width:72px;height:72px}
         <button class="chip" onclick="morphPresets('lead')">&#128256; LEAD</button>
         <button class="chip" onclick="morphPresets('pad')">&#128256; PAD</button>
       </div>
+      <div style="margin-top:6px">
+        <button class="chip" onclick="randomizeAllPresets()">&#127922; RANDOMIZE ALL (N)</button>
+      </div>
     </div>
     <div class="panel">
       <div class="panel-title">PERFORMANCE PADS</div>
@@ -1248,6 +1251,8 @@ function updateSeqUI(){
     mute.className='seq-mute'+(trackMutes[t]?' muted':'');
     mute.textContent='M';
     mute.onclick=()=>{trackMutes[t]=!trackMutes[t];mute.classList.toggle('muted')};
+    mute.ondblclick=()=>{rotateTrackPattern(t,1)}; // double-click: rotate right
+    mute.title='Click: mute, Double-click: rotate pattern';
     row.appendChild(mute);
     
     const solo=document.createElement('div');
@@ -1714,6 +1719,9 @@ document.addEventListener('keydown',e=>{
     case 'q':case 'Q':duplicatePattern(3);break; // duplicate LEAD to ARP
     case 'x':case 'X':quantizePatterns();break;
     case 'y':case 'Y':toggleBPMAutomation();break;
+    case 'n':case 'N':randomizeAllPresets();break;
+    case '[':adjustSectionLength(-2);break;
+    case ']':adjustSectionLength(2);break;
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -2649,6 +2657,56 @@ function applySectionBPM(){
     currentBpm=newBpm;
     updateLCD();
   }
+}
+
+// ============================================================
+// PATTERN ROTATE — Rotate a single track's pattern
+// ============================================================
+function rotateTrackPattern(trackIdx,direction){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackName=trackNames[trackIdx];
+  if(!patterns[trackName])return;
+  pushUndo();
+  const arr=patterns[trackName];
+  if(direction>0){
+    arr.unshift(arr.pop()); // rotate right
+  } else {
+    arr.push(arr.shift()); // rotate left
+  }
+  updateSeqUI();
+  toast('ROTATED: '+trackName.toUpperCase()+' '+(direction>0?'RIGHT':'LEFT'));
+}
+
+// ============================================================
+// PRESET RANDOMIZE ALL — Randomize all presets at once
+// ============================================================
+function randomizeAllPresets(){
+  const cats=['bass','lead','arp','pad'];
+  cats.forEach(cat=>{
+    const options=LIB[cat].filter(p=>p.genre===currentGenre);
+    if(options.length>0){
+      currentPreset[cat]=pick(options);
+    }
+  });
+  // Also randomize drum preset
+  const drumOptions=LIB.drum.filter(p=>p.genre===currentGenre);
+  if(drumOptions.length>0){
+    currentDrumPreset=pick(drumOptions);
+  }
+  buildPresetChips();
+  toast('ALL PRESETS RANDOMIZED ('+currentGenre+')');
+}
+
+// ============================================================
+// SONG LENGTH CONTROL — Adjust bars per section
+// ============================================================
+function adjustSectionLength(delta){
+  const sectionName=SECTIONS[currentSection];
+  const current=SECTION_BARS[sectionName]||8;
+  const newVal=clamp(current+delta,2,32);
+  SECTION_BARS[sectionName]=newVal;
+  updateLCD();
+  toast(sectionName+' LENGTH: '+newVal+' bars');
 }
 
 // ============================================================
