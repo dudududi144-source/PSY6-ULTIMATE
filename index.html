@@ -90,6 +90,7 @@ body.perf-mode .knob{width:72px;height:72px}
         <button onclick="undoSequencer()">&#8630; UNDO (U)</button>
         <button onclick="triggerFill()">&#128165; FILL (F)</button>
         <button onclick="cycleBassMode()" id="btnBassMode">&#127928; BASS: ROLLING</button>
+        <button onclick="cycleHumanize()" id="btnHumanize">&#128100; HUMAN: 20%</button>
         <button onclick="reseed()">&#8635; VARIATION (V)</button>
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="randomizeSound()">&#127922; SOUND</button>
@@ -146,6 +147,11 @@ body.perf-mode .knob{width:72px;height:72px}
       <div style="margin-top:6px;display:flex;gap:6px">
         <button class="chip" onclick="exportSong()">&#8681; SONG</button>
         <button class="chip" onclick="importSong()">&#8679; SONG</button>
+      </div>
+      <div style="margin-top:6px;display:flex;gap:6px">
+        <button class="chip" onclick="morphPresets('bass')">&#128256; BASS</button>
+        <button class="chip" onclick="morphPresets('lead')">&#128256; LEAD</button>
+        <button class="chip" onclick="morphPresets('pad')">&#128256; PAD</button>
       </div>
     </div>
     <div class="panel">
@@ -217,6 +223,12 @@ let fillActive = false;
 let fillStepsRemaining = 0;
 // Pad octave shift
 let padOctaveShift = 0;
+// Humanization state
+let humanizeAmount = 20; // percentage (0-100)
+// MIDI Learn mode state
+let midiLearnMode = false;
+let midiLearnTargetKnob = null;
+let midiCCMappings = {}; // cc -> knobId
 
 // --- State ---
 let audioCtx=null, engine=null, isPlaying=false;
@@ -895,6 +907,8 @@ function scheduler(){
 function scheduleStep(step,time){
   const trackNames=['kick','bass','perc','lead','arp','pad'];
   const stepDur=60/currentBpm/4;
+  // Humanize: apply micro-timing (except kick to keep groove solid)
+  const humanTime=getHumanizedTime(time);
   
   // Determine if any track is soloed
   const anySolo=trackSolos.some(s=>s);
@@ -945,9 +959,10 @@ function scheduleStep(step,time){
       engine.triggerSynth(time,bassNote,currentPreset.bass,stepDur*(currentPreset.bass.gate||0.4),1);
       musicalState.bassLastMidi=bassNote;
       updateGrammars('bass',step,bassNote);
-    } else if(t===2){ // PERC
+    } else if(t===2){ // PERC — humanized
+      if(!shouldPlayWithProbability(ev))continue;
       const percPreset=LIB.drum.find(d=>d.type==='hatC')||currentDrumPreset;
-      engine.triggerDrum(time,percPreset,ev.vel||0.5,2);
+      engine.triggerDrum(humanTime,percPreset,(ev.vel||0.5)*(0.8+rand()*0.4),2);
     } else if(t===3){ // LEAD
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
       let leadNote;
@@ -961,9 +976,10 @@ function scheduleStep(step,time){
       sendMIDINoteOut(leadNote,ev.vel||0.7,1.5); // MIDI Out
       musicalState.leadLastMidi=leadNote;
       updateGrammars('lead',step,leadNote);
-    } else if(t===4){ // ARP — chord-aware arpeggiator
+    } else if(t===4){ // ARP — chord-aware arpeggiator + humanize
+      if(!shouldPlayWithProbability(ev))continue;
       const arpNote=60+getArpNote(step);
-      engine.triggerSynth(time,arpNote,currentPreset.arp,stepDur*0.8,4);
+      engine.triggerSynth(humanTime,arpNote,currentPreset.arp,stepDur*0.8,4);
     } else if(t===5){ // PAD — plays current chord from progression
       const chordNotes=getCurrentChordNotes();
       const baseOctave=48;
@@ -1522,6 +1538,20 @@ function handleMIDI(msg){
       applyMacro('ENERGY',val);
     } else if(cc===30){ // Macro: TENSION
       applyMacro('TENSION',val);
+    } else if(midiLearnMode&&midiLearnTargetKnob){
+      // MIDI Learn: map this CC to the target knob
+      midiCCMappings[cc]=midiLearnTargetKnob;
+      toast('MAPPED: CC '+cc+' -> '+midiLearnTargetKnob.toUpperCase());
+      midiLearnTargetKnob=null;
+      midiLearnMode=false;
+    } else if(midiCCMappings[cc]){
+      // Apply mapped CC to knob
+      const knobId=midiCCMappings[cc];
+      const k=KNOBS.find(k=>k.id===knobId);
+      if(k){
+        knobValues[knobId]=k.min+val*(k.max-k.min);
+        updateKnob(k);
+      }
     }
   }
 }
@@ -1598,6 +1628,7 @@ document.addEventListener('keydown',e=>{
     case 'l':case 'L':toggleSectionLoop();break;
     case 'u':case 'U':undoSequencer();break;
     case 'f':case 'F':triggerFill();break;
+    case 'g':case 'G':cycleHumanize();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
     case '-':case '_':padOctaveShift=Math.max(padOctaveShift-1,-3);toast('PAD OCTAVE: '+padOctaveShift);break;
@@ -2293,6 +2324,99 @@ function autoSaveSectionPattern(){
   if(!sectionPatterns[sectionName]){
     sectionPatterns[sectionName]=JSON.parse(JSON.stringify(patterns));
   }
+}
+
+// ============================================================
+// HUMANIZATION — Probability + Micro-timing
+// ============================================================
+function shouldPlayWithProbability(ev){
+  if(!ev.on)return false;
+  // If prob is set on the event, use it
+  const prob=ev.prob!==undefined?ev.prob:1.0;
+  // Humanize adds randomness based on humanizeAmount
+  const humanizeFactor=1-(humanizeAmount/100)*0.5;
+  return rand()<(prob*humanizeFactor+ (1-humanizeFactor));
+}
+
+function getHumanizedTime(time){
+  if(humanizeAmount===0)return time;
+  // Micro-timing: up to ±humanizeAmount ms of jitter
+  const jitter=(rand()-0.5)*2*(humanizeAmount/100)*0.015; // max ±15ms at 100%
+  return time+jitter;
+}
+
+function cycleHumanize(){
+  const levels=[0,20,40,60,80];
+  const idx=(levels.indexOf(humanizeAmount)+1)%levels.length;
+  humanizeAmount=levels[idx];
+  const btn=document.getElementById('btnHumanize');
+  if(btn)btn.innerHTML='&#128100; HUMAN: '+humanizeAmount+'%';
+  toast('HUMANIZE: '+humanizeAmount+'%');
+}
+
+// ============================================================
+// MIDI LEARN MODE — Map CC to knobs manually
+// ============================================================
+function toggleMIDILearn(){
+  midiLearnMode=!midiLearnMode;
+  if(midiLearnMode){
+    midiLearnTargetKnob=null;
+    toast('MIDI LEARN: ON — move a MIDI knob, then click a UI knob');
+  } else {
+    toast('MIDI LEARN: OFF');
+  }
+}
+
+function setMIDILearnTarget(knobId){
+  if(!midiLearnMode)return;
+  midiLearnTargetKnob=knobId;
+  toast('MIDI LEARN: waiting for CC for '+knobId.toUpperCase());
+}
+
+// ============================================================
+// PRESET MORPHER — Blend two presets
+// ============================================================
+function morphPresets(cat){
+  const presets=LIB[cat].filter(p=>p.genre===currentGenre);
+  if(presets.length<2){toast('NEED 2+ PRESETS TO MORPH');return}
+  const a=pick(presets);
+  let b=pick(presets);
+  while(b.id===a.id&&presets.length>1)b=pick(presets);
+  
+  // Blend numeric parameters
+  const blend=0.5;
+  const morphed={
+    id:'MORPH-'+cat.toUpperCase()+'-'+Date.now().toString(36).toUpperCase(),
+    name:'Morph '+cat,
+    genre:currentGenre,
+    cat:cat,
+    engine:'SYNTH',
+    wave1:rand()<0.5?a.wave1:b.wave1,
+    wave2:rand()<0.5?a.wave2:b.wave2,
+    oct2:Math.round((a.oct2||0)*blend+(b.oct2||0)*(1-blend)),
+    detune:Math.round((a.detune||8)*blend+(b.detune||8)*(1-blend)),
+    cutoff:Math.round((a.cutoff||1500)*blend+(b.cutoff||1500)*(1-blend)),
+    res:Math.round(((a.res||3)*blend+(b.res||3)*(1-blend))*10)/10,
+    fType:'lowpass',
+    atk:((a.atk||0.005)*blend+(b.atk||0.005)*(1-blend)),
+    dec:((a.dec||0.3)*blend+(b.dec||0.3)*(1-blend)),
+    sus:((a.sus||0.6)*blend+(b.sus||0.6)*(1-blend)),
+    rel:((a.rel||0.2)*blend+(b.rel||0.2)*(1-blend)),
+    gate:((a.gate||0.6)*blend+(b.gate||0.6)*(1-blend)),
+    lfoRate:0,lfoDepth:0,lfoDest:'off',
+    poly:Math.max(a.poly||4,b.poly||4)
+  };
+  
+  LIB[cat].push(morphed);
+  currentPreset[cat]=morphed;
+  buildPresetChips();
+  
+  // Audition
+  if(audioCtx&&engine){
+    const note=cat==='bass'?36:67;
+    engine.triggerSynth(audioCtx.currentTime+0.05,note,morphed,0.4,cat==='bass'?1:3);
+  }
+  toast('MORPHED: '+a.name+' + '+b.name);
 }
 
 // ============================================================
