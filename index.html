@@ -66,6 +66,15 @@ body.perf-mode .lcd .section-name{font-size:36px}
 body.perf-mode .lcd .bar-info{font-size:16px}
 body.perf-mode .pad{aspect-ratio:auto;height:80px;font-size:18px}
 body.perf-mode .knob{width:72px;height:72px}
+/* Help panel */
+.help-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:2000;display:none;overflow-y:auto;padding:40px 20px}
+.help-overlay.show{display:block}
+.help-panel{max-width:700px;margin:0 auto;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px}
+.help-panel h2{color:var(--accent);font-size:16px;margin-bottom:16px}
+.help-table{width:100%;border-collapse:collapse;font-size:12px}
+.help-table td{padding:4px 8px;border-bottom:1px solid var(--border)}
+.help-table td:first-child{color:var(--accent);width:100px;font-weight:bold}
+.help-close{float:right;cursor:pointer;color:var(--text-dim);font-size:20px}
 </style>
 </head>
 <body>
@@ -102,6 +111,7 @@ body.perf-mode .knob{width:72px;height:72px}
         <button id="btnLiveRec" onclick="toggleLiveRecording()">&#128308; LIVE REC</button>
         <button onclick="saveProject(prompt('Project name:','my-groove')||'default')">&#128190; SAVE</button>
         <button onclick="loadProject()">&#128194; LOAD</button>
+        <button onclick="toggleHelp()">&#10067; HELP</button>
       </div>
       <div class="section-btns" id="sectionBtns"></div>
     </div>
@@ -177,6 +187,49 @@ body.perf-mode .knob{width:72px;height:72px}
   PSY6 ULTIMATE &middot; pooled engine v1.0 &middot; arranger: INTRO &rarr; BUILD &rarr; DROP &rarr; BREAK &rarr; RISER &rarr; DROP2 &rarr; loop w/ mutation
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- Help Panel -->
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()">
+  <div class="help-panel" onclick="event.stopPropagation()">
+    <span class="help-close" onclick="toggleHelp()">&#10005;</span>
+    <h2>PSY6 ULTIMATE — Keyboard Shortcuts</h2>
+    <table class="help-table">
+      <tr><td>SPACE</td><td>Play / Stop</td></tr>
+      <tr><td>V</td><td>New variation (reseed)</td></tr>
+      <tr><td>S</td><td>Sound design randomizer</td></tr>
+      <tr><td>A</td><td>Cycle arpeggiator mode</td></tr>
+      <tr><td>W</td><td>Generate chord progression</td></tr>
+      <tr><td>D / H / Z</td><td>Generate drums / melody / arp</td></tr>
+      <tr><td>R</td><td>Record + Export WAV (4 bars)</td></tr>
+      <tr><td>T</td><td>Tap tempo</td></tr>
+      <tr><td>L</td><td>Section loop toggle</td></tr>
+      <tr><td>U</td><td>Undo sequencer edit</td></tr>
+      <tr><td>F</td><td>Trigger percussion fill</td></tr>
+      <tr><td>B</td><td>Cycle bass pattern mode</td></tr>
+      <tr><td>+ / -</td><td>Pad octave shift</td></tr>
+      <tr><td>G</td><td>Cycle humanize amount</td></tr>
+      <tr><td>&lt; / &gt;</td><td>Nudge all patterns left/right</td></tr>
+      <tr><td>Q</td><td>Duplicate pattern (copy to next track)</td></tr>
+      <tr><td>?</td><td>Toggle this help panel</td></tr>
+      <tr><td>1-8</td><td>Jump to section</td></tr>
+    </table>
+    <h2 style="margin-top:16px">Mouse Controls</h2>
+    <table class="help-table">
+      <tr><td>Left-click</td><td>Toggle step on/off</td></tr>
+      <tr><td>Right-click</td><td>Cycle step velocity (30%/60%/100%)</td></tr>
+      <tr><td>Right-click chip</td><td>Toggle preset favorite</td></tr>
+      <tr><td>Drag knob</td><td>Adjust value (vertical)</td></tr>
+      <tr><td>XY Pad</td><td>Filter cutoff (X) + resonance (Y)</td></tr>
+    </table>
+    <h2 style="margin-top:16px">MIDI</h2>
+    <table class="help-table">
+      <tr><td>Notes</td><td>Performance pads + teaches grammar</td></tr>
+      <tr><td>CC 20-27</td><td>8 Knobs</td></tr>
+      <tr><td>CC 28-30</td><td>Macros (SPACE/ENERGY/TENSION)</td></tr>
+      <tr><td>Clock</td><td>Tempo sync (when CLOCK IN enabled)</td></tr>
+    </table>
+  </div>
+</div>
 
 <script>
 
@@ -1648,6 +1701,8 @@ document.addEventListener('keydown',e=>{
     case 'g':case 'G':cycleHumanize();break;
     case ',':case '<':nudgeAll(-1);break;
     case '.':case '>':nudgeAll(1);break;
+    case 'q':case 'Q':duplicatePattern(3);break; // duplicate LEAD to ARP
+    case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
     case '-':case '_':padOctaveShift=Math.max(padOctaveShift-1,-3);toast('PAD OCTAVE: '+padOctaveShift);break;
@@ -2505,6 +2560,32 @@ function toggleFavorite(presetId){
     toast('Added to favorites');
   }
   buildPresetChips();
+}
+
+// ============================================================
+// HELP PANEL — Keyboard shortcut reference
+// ============================================================
+function toggleHelp(){
+  const overlay=document.getElementById('helpOverlay');
+  if(overlay)overlay.classList.toggle('show');
+}
+
+// ============================================================
+// PATTERN DUPLICATE — Copy pattern to next track
+// ============================================================
+function duplicatePattern(trackIdx){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  if(trackIdx>=trackNames.length-1)return;
+  const src=trackNames[trackIdx];
+  const dst=trackNames[trackIdx+1];
+  if(!patterns[src]||!patterns[dst])return;
+  pushUndo();
+  // Copy step on/off states (not velocities)
+  for(let i=0;i<16;i++){
+    patterns[dst][i].on=patterns[src][i].on;
+  }
+  updateSeqUI();
+  toast('DUPLICATED: '+src.toUpperCase()+' -> '+dst.toUpperCase());
 }
 
 // ============================================================
