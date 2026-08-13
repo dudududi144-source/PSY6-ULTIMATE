@@ -90,6 +90,7 @@ Connect any MIDI controller:
 | 1.7 | MIDI Clock sync (external tempo + transport control) |
 | 1.8 | Macro Controls (SPACE/ENERGY/TENSION) + Performance Mode |
 | 1.9 | Grammar Decay (adaptive forgetting) + Grammar Visualization |
+| 2.0 | Chord Progression Engine (7 progressions, per-bar changes, bass anchoring) |
 
 ## License
 
