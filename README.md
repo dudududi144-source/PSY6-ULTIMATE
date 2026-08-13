@@ -107,6 +107,7 @@ Toggle with **📤 MIDI OUT** button:
 | 2.7 | Humanization (probability + micro-timing) + MIDI Learn Mode + Preset Morpher |
 | 2.8 | Pattern Nudge + Track Volume controls + Preset Favorites |
 | 2.9 | Help Panel (shortcut reference) + Pattern Duplicate |
+| 3.0 | Preset Search + Global Quantize + BPM Automation per section |
 
 ## License
 
