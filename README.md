@@ -124,6 +124,7 @@ Toggle with **📤 MIDI OUT** button:
 | 4.4 | MIDI hot-plug detection, AudioContext resume, envelope overlap prevention (synth + drum) |
 | 4.5 | Song export deep copy, genre fallback, UI null checks (5 functions), BPM bounds (MIDI clock + ramp) |
 | 4.6 | safeParse wrapper, canvas fallback text, removed all console.log (security + a11y + quality) |
+| 4.7 | applyBestCandidate empty guard, notes array guarantee, sampleMelodicInterval null check |
 
 ## License
 
