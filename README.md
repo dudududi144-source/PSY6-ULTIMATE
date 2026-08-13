@@ -120,6 +120,7 @@ Toggle with **📤 MIDI OUT** button:
 | 4.0 | Section Repeat (Home) + Track Compressor (End) + Preset Random Walk (PageUp) |
 | 4.1 | Help Panel updated with all 46 shortcuts + mouse controls + MIDI map |
 | 4.2 | Bug fixes: keydown guard, disconnect safety, state resets, overflow protection, div-by-zero, infinite loop |
+| 4.3 | Deep bug fixes: pattern fields, empty scale/progression guards, NaN handling, null checks, empty buffer handling |
 
 ## License
 
