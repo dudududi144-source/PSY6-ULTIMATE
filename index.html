@@ -1307,6 +1307,11 @@ function updateSeqUI(){
       step.oncontextmenu=(e)=>{
         e.preventDefault();
         if(!patterns[patternKeys[t]])return;
+        if(e.shiftKey){
+          // Shift+Right-click: cycle probability
+          cycleStepProbability(t,s);
+          return;
+        }
         pushUndo();
         const ev=patterns[patternKeys[t]][s];
         const velLevels=[0.3,0.6,1.0];
@@ -1494,7 +1499,7 @@ function buildPresetChips(){
       chip.className='chip'+(currentPreset[cat]&&currentPreset[cat].id===p.id?' active':'');
       const star=presetFavorites.has(p.id)?'★ ':'';
       chip.textContent=star+p.name;
-      chip.onclick=()=>{currentPreset[cat]=p;buildPresetChips();toast(cat.toUpperCase()+': '+p.name)};
+      chip.onclick=()=>{currentPreset[cat]=p;addToPresetHistory(p);buildPresetChips();toast(cat.toUpperCase()+': '+p.name)};
       chip.oncontextmenu=(e)=>{e.preventDefault();toggleFavorite(p.id)};
       container.appendChild(chip);
     });
@@ -1749,6 +1754,7 @@ document.addEventListener('keydown',e=>{
     case 'p':case 'P':togglePresetChain();break;
     case 'j':case 'J':swapTrackPatterns(3,4);break; // swap LEAD <-> ARP
     case 'm':case 'M':toggleAutoMorph();break;
+    case ';':case ':':mergeTrackPatterns(3,4);break; // merge ARP into LEAD
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -2943,6 +2949,72 @@ function checkAutoMorph(){
     const cat=pick(['bass','lead','arp','pad']);
     morphPresets(cat);
   }
+}
+
+// ============================================================
+// PATTERN MERGE — Combine two patterns with OR logic
+// ============================================================
+function mergeTrackPatterns(trackIdx1,trackIdx2){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const name1=trackNames[trackIdx1];
+  const name2=trackNames[trackIdx2];
+  if(!patterns[name1]||!patterns[name2])return;
+  pushUndo();
+  // Merge: step is ON if either track has it ON
+  for(let i=0;i<16;i++){
+    const on1=patterns[name1][i].on;
+    const on2=patterns[name2][i].on;
+    patterns[name1][i].on=on1||on2;
+    // Keep higher velocity
+    if(on2&&(!on1||(patterns[name2][i].vel||0.8)>(patterns[name1][i].vel||0.8))){
+      patterns[name1][i].vel=patterns[name2][i].vel;
+    }
+  }
+  updateSeqUI();
+  toast('MERGED: '+name2.toUpperCase()+' into '+name1.toUpperCase());
+}
+
+// ============================================================
+// PRESET HISTORY — Track recently used presets
+// ============================================================
+let presetHistory=[];
+const MAX_HISTORY=10;
+
+function addToPresetHistory(preset){
+  if(!preset)return;
+  // Remove if already in history
+  presetHistory=presetHistory.filter(p=>p.id!==preset.id);
+  // Add to front
+  presetHistory.unshift(preset);
+  // Trim to max size
+  if(presetHistory.length>MAX_HISTORY)presetHistory.pop();
+}
+
+function showPresetHistory(){
+  if(presetHistory.length===0){
+    toast('PRESET HISTORY: empty');
+    return;
+  }
+  const names=presetHistory.slice(0,5).map(p=>p.name).join(', ');
+  toast('RECENT: '+names);
+}
+
+// ============================================================
+// STEP PROBABILITY — Per-step play probability
+// ============================================================
+function cycleStepProbability(trackIdx,stepIdx){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackName=trackNames[trackIdx];
+  if(!patterns[trackName])return;
+  pushUndo();
+  const ev=patterns[trackName][stepIdx];
+  const probLevels=[1.0,0.75,0.5,0.25];
+  const currentProb=ev.prob!==undefined?ev.prob:1.0;
+  const nextIdx=(probLevels.indexOf(currentProb)+1)%probLevels.length;
+  ev.prob=probLevels[nextIdx];
+  ev.on=true;
+  updateSeqUI();
+  toast('PROB: '+trackName.toUpperCase()+' step '+stepIdx+' = '+Math.round(ev.prob*100)+'%');
 }
 
 // ============================================================
