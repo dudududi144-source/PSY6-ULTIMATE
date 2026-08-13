@@ -497,7 +497,7 @@ function generateCandidates(count){
     score+=(1-Math.abs(registerShift))*1.5; // continuity
     score+=syncopation*1; // novelty
     score+=Math.abs(contourDir)*0.5; // contour
-    candidates.push({notes,score,density,registerShift});
+    candidates.push({notes:notes||[],score,density,registerShift});
   }
   candidates.sort((a,b)=>b.score-a.score);
   return candidates;
@@ -505,6 +505,7 @@ function generateCandidates(count){
 
 function applyBestCandidate(){
   const candidates=generateCandidates(5);
+  if(!candidates||candidates.length===0)return;
   const best=candidates[0];
   lastCandidateScore=best.score.toFixed(3);
   // Apply to lead pattern
@@ -689,7 +690,7 @@ function sampleBassFromGrammar(rootPc){
 }
 
 function sampleMelodicInterval(){
-  if(grammars.melodic.total < 4) return pick([-2,-1,1,2,3]); // not enough data
+  if(!grammars.melodic||grammars.melodic.total<4)return pick([-2,-1,1,2,3]); // not enough data
   const total = grammars.melodic.intervals.reduce((a,b)=>a+b, 0);
   if(total === 0) return 0;
   let r = rand() * total;
