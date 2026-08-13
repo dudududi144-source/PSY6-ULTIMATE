@@ -112,6 +112,8 @@ body.perf-mode .knob{width:72px;height:72px}
         <button onclick="saveProject(prompt('Project name:','my-groove')||'default')">&#128190; SAVE</button>
         <button onclick="loadProject()">&#128194; LOAD</button>
         <button onclick="toggleHelp()">&#10067; HELP</button>
+        <button onclick="toggleMuteGroup('DRUMS')">&#129345; DRUMS</button>
+        <button onclick="toggleMuteGroup('SYNTHS')">&#127929; SYNTHS</button>
       </div>
       <div class="section-btns" id="sectionBtns"></div>
     </div>
@@ -950,6 +952,10 @@ function scheduler(){
       applyPresetChain();
       // Check auto-morph
       checkAutoMorph();
+      // Check preset evolve
+      checkPresetEvolve();
+      // Update BPM ramp
+      updateBPMRamp();
       // Check section advancement
       const sectionBars=SECTION_BARS[SECTIONS[currentSection]]||8;
       if(currentBar>=sectionBars){
@@ -1774,6 +1780,9 @@ document.addEventListener('keydown',e=>{
     case '7':stretchTrackPattern(3,0.5);break; // compress LEAD
     case '8':stretchTrackPattern(3,2);break; // stretch LEAD
     case '9':blendPresets('lead');break; // blend LEAD
+    case '4':togglePresetEvolve();break;
+    case '5':rampUp();break;
+    case '6':rampDown();break;
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -3233,6 +3242,103 @@ function blendPresets(cat){
     engine.triggerSynth(audioCtx.currentTime+0.05,note,blended,0.4,cat==='bass'?1:3);
   }
   toast('BLENDED: '+a.name+' + '+b.name);
+}
+
+// ============================================================
+// BPM RAMP — Gradual tempo change (accelerando/ritardando)
+// ============================================================
+let bpmRampActive=false;
+let bpmRampTarget=145;
+let bpmRampStart=145;
+let bpmRampBars=4;
+let bpmRampCurrentBar=0;
+
+function startBPMRamp(targetBpm,bars){
+  bpmRampStart=currentBpm;
+  bpmRampTarget=clamp(targetBpm,60,200);
+  bpmRampBars=clamp(bars,1,16);
+  bpmRampCurrentBar=0;
+  bpmRampActive=true;
+  toast('BPM RAMP: '+Math.round(bpmRampStart)+' -> '+bpmRampTarget+' over '+bpmRampBars+' bars');
+}
+
+function updateBPMRamp(){
+  if(!bpmRampActive)return;
+  bpmRampCurrentBar++;
+  if(bpmRampCurrentBar>=bpmRampBars){
+    currentBpm=bpmRampTarget;
+    bpmRampActive=false;
+    toast('BPM RAMP COMPLETE: '+Math.round(bpmRampTarget)+' BPM');
+  } else {
+    const progress=bpmRampCurrentBar/bpmRampBars;
+    currentBpm=bpmRampStart+(bpmRampTarget-bpmRampStart)*progress;
+  }
+  knobValues.bpm=currentBpm;
+  updateKnob(KNOBS[0]);
+  updateLCD();
+}
+
+// Quick ramp shortcuts
+function rampUp(){
+  startBPMRamp(currentBpm+10,4);
+}
+
+function rampDown(){
+  startBPMRamp(currentBpm-10,4);
+}
+
+// ============================================================
+// MUTE GROUPS — Mute/unmute track groups
+// ============================================================
+const MUTE_GROUPS={
+  'DRUMS':[0,2],      // kick + perc
+  'BASS':[1],         // bass
+  'SYNTHS':[3,4,5],   // lead + arp + pad
+  'ALL':[0,1,2,3,4,5]
+};
+let muteGroupState={'DRUMS':false,'BASS':false,'SYNTHS':false};
+
+function toggleMuteGroup(groupName){
+  const tracks=MUTE_GROUPS[groupName];
+  if(!tracks)return;
+  muteGroupState[groupName]=!muteGroupState[groupName];
+  const muted=muteGroupState[groupName];
+  tracks.forEach(function(idx){
+    trackMutes[idx]=muted;
+  });
+  updateSeqUI();
+  toast(groupName+' GROUP: '+(muted?'MUTED':'UNMUTED'));
+}
+
+// ============================================================
+// PRESET EVOLVE — Gradually mutate a preset over time
+// ============================================================
+let evolveEnabled=false;
+let evolveCounter=0;
+
+function togglePresetEvolve(){
+  evolveEnabled=!evolveEnabled;
+  evolveCounter=0;
+  toast('PRESET EVOLVE: '+(evolveEnabled?'ON — mutating every 4 bars':'OFF'));
+}
+
+function checkPresetEvolve(){
+  if(!evolveEnabled)return;
+  evolveCounter++;
+  if(evolveCounter>=4){
+    evolveCounter=0;
+    // Evolve current LEAD preset slightly
+    const p=currentPreset.lead;
+    if(p){
+      p.cutoff=clamp(p.cutoff+(rand()-0.5)*400,100,18000);
+      p.res=clamp(p.res+(rand()-0.5)*4,0.5,30);
+      p.detune=clamp(p.detune+(rand()-0.5)*6,0,50);
+      // Audition the evolved sound
+      if(audioCtx&&engine){
+        engine.triggerSynth(audioCtx.currentTime+0.05,67,p,0.3,3);
+      }
+    }
+  }
 }
 
 // ============================================================
