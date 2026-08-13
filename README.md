@@ -100,6 +100,7 @@ Toggle with **📤 MIDI OUT** button:
 | 2.0 | Chord Progression Engine (7 progressions, per-bar changes, bass anchoring) |
 | 2.1 | Chord-aware Arpeggiator (5 modes: UP/DOWN/UP-DOWN/RANDOM/CHORD) |
 | 2.2 | MIDI Out (notes + clock to external gear) + Track Solo |
+| 2.3 | Per-track FX Sends (delay/reverb per track) + Song Export/Import |
 
 ## License
 
