@@ -1007,6 +1007,7 @@ function scheduleStep(step,time){
     } else if(t===1){ // BASS — mode-aware, anchors to chord root
       // Check bass mode pattern
       if(!shouldBassPlay(step))continue;
+      const bassTime=time+trackDelayOffsets[1];
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
       const chordRoot=currentChordRoot||scale[0];
       let bassNote;
@@ -1020,7 +1021,7 @@ function scheduleStep(step,time){
           bassNote+=pick([scale[1],scale[2],7]); // approach tones
         }
       }
-      engine.triggerSynth(time,bassNote,currentPreset.bass,stepDur*(currentPreset.bass.gate||0.4),1);
+      engine.triggerSynth(bassTime,bassNote,currentPreset.bass,stepDur*(currentPreset.bass.gate||0.4),1);
       musicalState.bassLastMidi=bassNote;
       updateGrammars('bass',step,bassNote);
     } else if(t===2){ // PERC — humanized + repeat
@@ -1770,6 +1771,9 @@ document.addEventListener('keydown',e=>{
     case ';':case ':':mergeTrackPatterns(3,4);break; // merge ARP into LEAD
     case '0':invertAllPatterns();break;
     case 'c':case 'C':clonePreset('lead');break;
+    case '7':stretchTrackPattern(3,0.5);break; // compress LEAD
+    case '8':stretchTrackPattern(3,2);break; // stretch LEAD
+    case '9':blendPresets('lead');break; // blend LEAD
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -3130,6 +3134,105 @@ function cycleTrackFxMode(trackIdx){
     }
   }
   toast(trackNames[trackIdx].toUpperCase()+' FX: '+mode);
+}
+
+// ============================================================
+// PATTERN STRETCH/COMPRESS — Time-stretch a pattern
+// ============================================================
+function stretchTrackPattern(trackIdx,factor){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackName=trackNames[trackIdx];
+  if(!patterns[trackName])return;
+  pushUndo();
+  const arr=patterns[trackName];
+  const newArr=Array.from({length:16},function(){return{on:false,vel:0.8,prob:1.0,repeat:1}});
+  
+  if(factor>1){
+    // Stretch: spread steps over more space
+    for(let i=0;i<16;i++){
+      const srcIdx=Math.floor(i/factor);
+      if(srcIdx<16){
+        newArr[i].on=arr[srcIdx].on;
+        newArr[i].vel=arr[srcIdx].vel||0.8;
+        newArr[i].prob=arr[srcIdx].prob!==undefined?arr[srcIdx].prob:1.0;
+        newArr[i].repeat=arr[srcIdx].repeat||1;
+      }
+    }
+  } else {
+    // Compress: pack steps into less space
+    for(let i=0;i<16;i++){
+      const srcIdx=Math.floor(i*factor)%16;
+      newArr[i].on=arr[srcIdx].on;
+      newArr[i].vel=arr[srcIdx].vel||0.8;
+      newArr[i].prob=arr[srcIdx].prob!==undefined?arr[srcIdx].prob:1.0;
+      newArr[i].repeat=arr[srcIdx].repeat||1;
+    }
+  }
+  
+  patterns[trackName]=newArr;
+  updateSeqUI();
+  toast(trackName.toUpperCase()+(factor>1?' STRETCHED':' COMPRESSED')+' x'+factor);
+}
+
+// ============================================================
+// TRACK DELAY OFFSET — Per-track timing offset
+// ============================================================
+let trackDelayOffsets=[0,0,0,0,0,0]; // in seconds
+
+function adjustTrackDelayOffset(trackIdx,delta){
+  trackDelayOffsets[trackIdx]=clamp(trackDelayOffsets[trackIdx]+delta,-0.03,0.03);
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const ms=Math.round(trackDelayOffsets[trackIdx]*1000);
+  toast(trackNames[trackIdx].toUpperCase()+' OFFSET: '+(ms>=0?'+':'')+ms+'ms');
+}
+
+// ============================================================
+// PRESET BLEND — Blend current preset with a random one
+// ============================================================
+function blendPresets(cat){
+  const options=LIB[cat].filter(function(p){return p.genre===currentGenre});
+  if(options.length<2){toast('NEED 2+ PRESETS TO BLEND');return}
+  
+  const a=currentPreset[cat]||options[0];
+  let b=options[0];
+  for(let i=0;i<options.length;i++){
+    if(options[i].id!==a.id){b=options[i];break}
+  }
+  
+  const w=0.5;
+  const blended={
+    id:'BLEND-'+cat.toUpperCase()+'-'+Date.now().toString(36).toUpperCase(),
+    name:'Blend '+cat,
+    genre:currentGenre,
+    cat:cat,
+    engine:'SYNTH',
+    wave1:w>0.5?a.wave1:b.wave1,
+    wave2:w>0.5?a.wave2:b.wave2,
+    oct2:Math.round((a.oct2||0)*w+(b.oct2||0)*(1-w)),
+    detune:Math.round((a.detune||8)*w+(b.detune||8)*(1-w)),
+    cutoff:Math.round((a.cutoff||1500)*w+(b.cutoff||1500)*(1-w)),
+    res:Math.round(((a.res||3)*w+(b.res||3)*(1-w))*10)/10,
+    fType:'lowpass',
+    atk:(a.atk||0.005)*w+(b.atk||0.005)*(1-w),
+    dec:(a.dec||0.3)*w+(b.dec||0.3)*(1-w),
+    sus:(a.sus||0.6)*w+(b.sus||0.6)*(1-w),
+    rel:(a.rel||0.2)*w+(b.rel||0.2)*(1-w),
+    gate:(a.gate||0.6)*w+(b.gate||0.6)*(1-w),
+    lfoRate:0,lfoDepth:0,lfoDest:'off',
+    poly:Math.max(a.poly||4,b.poly||4)
+  };
+  
+  LIB[cat].push(blended);
+  currentPreset[cat]=blended;
+  addToPresetHistory(blended);
+  buildPresetChips();
+  
+  // Audition
+  if(audioCtx&&engine){
+    const note=cat==='bass'?36:67;
+    engine.triggerSynth(audioCtx.currentTime+0.05,note,blended,0.4,cat==='bass'?1:3);
+  }
+  toast('BLENDED: '+a.name+' + '+b.name);
 }
 
 // ============================================================
