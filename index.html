@@ -1285,6 +1285,19 @@ function updateSeqUI(){
     };
     row.appendChild(vol);
     
+    // FX mode button
+    const fxBtn=document.createElement('div');
+    fxBtn.className='seq-mute';
+    fxBtn.style.borderColor='var(--accent2)';
+    fxBtn.textContent=['N','D','W','P'][trackFxModes[t]];
+    fxBtn.title='FX mode: '+TRACK_FX_MODES[trackFxModes[t]]+' (click to cycle)';
+    fxBtn.onclick=()=>{
+      cycleTrackFxMode(t);
+      fxBtn.textContent=['N','D','W','P'][trackFxModes[t]];
+      fxBtn.title='FX mode: '+TRACK_FX_MODES[trackFxModes[t]];
+    };
+    row.appendChild(fxBtn);
+    
     const label=document.createElement('div');
     label.className='seq-label';
     label.textContent=trackNames[t];
@@ -1755,6 +1768,8 @@ document.addEventListener('keydown',e=>{
     case 'j':case 'J':swapTrackPatterns(3,4);break; // swap LEAD <-> ARP
     case 'm':case 'M':toggleAutoMorph();break;
     case ';':case ':':mergeTrackPatterns(3,4);break; // merge ARP into LEAD
+    case '0':invertAllPatterns();break;
+    case 'c':case 'C':clonePreset('lead');break;
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -3015,6 +3030,106 @@ function cycleStepProbability(trackIdx,stepIdx){
   ev.on=true;
   updateSeqUI();
   toast('PROB: '+trackName.toUpperCase()+' step '+stepIdx+' = '+Math.round(ev.prob*100)+'%');
+}
+
+// ============================================================
+// PATTERN INVERT — Flip on/off states
+// ============================================================
+function invertTrackPattern(trackIdx){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackName=trackNames[trackIdx];
+  if(!patterns[trackName])return;
+  pushUndo();
+  const arr=patterns[trackName];
+  for(let i=0;i<16;i++){
+    arr[i].on=!arr[i].on;
+  }
+  updateSeqUI();
+  toast('INVERTED: '+trackName.toUpperCase());
+}
+
+// Invert all tracks
+function invertAllPatterns(){
+  pushUndo();
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  trackNames.forEach(name=>{
+    if(!patterns[name])return;
+    for(let i=0;i<16;i++){
+      patterns[name][i].on=!patterns[name][i].on;
+    }
+  });
+  updateSeqUI();
+  toast('ALL PATTERNS INVERTED');
+}
+
+// ============================================================
+// PRESET CLONE — Duplicate preset with subtle variations
+// ============================================================
+function clonePreset(cat){
+  const source=currentPreset[cat];
+  if(!source){toast('NO '+cat.toUpperCase()+' PRESET SELECTED');return}
+  
+  const clone={
+    ...source,
+    id:'CLONE-'+cat.toUpperCase()+'-'+Date.now().toString(36).toUpperCase(),
+    name:source.name+' (clone)',
+    // Subtle variations
+    cutoff:clamp(Math.round(source.cutoff*(0.85+rand()*0.3)),100,18000),
+    res:clamp(Math.round((source.res*(0.8+rand()*0.4))*10)/10,0.5,30),
+    detune:clamp(Math.round(source.detune*(0.7+rand()*0.6)),0,50),
+    dec:clamp(source.dec*(0.8+rand()*0.4),0.01,2),
+    rel:clamp(source.rel*(0.8+rand()*0.4),0.01,3)
+  };
+  
+  LIB[cat].push(clone);
+  currentPreset[cat]=clone;
+  addToPresetHistory(clone);
+  buildPresetChips();
+  
+  // Audition
+  if(audioCtx&&engine){
+    const note=cat==='bass'?36:67;
+    engine.triggerSynth(audioCtx.currentTime+0.05,note,clone,0.4,cat==='bass'?1:3);
+  }
+  toast('CLONED: '+source.name+' -> '+clone.name);
+}
+
+// ============================================================
+// TRACK FX MODE — Per-track FX behavior
+// ============================================================
+const TRACK_FX_MODES=['NORMAL','DRY','WET','PUMP'];
+let trackFxModes=[0,0,0,0,0,0]; // index into TRACK_FX_MODES per track
+
+function cycleTrackFxMode(trackIdx){
+  trackFxModes[trackIdx]=(trackFxModes[trackIdx]+1)%TRACK_FX_MODES.length;
+  const mode=TRACK_FX_MODES[trackFxModes[trackIdx]];
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  
+  if(engine){
+    switch(mode){
+      case 'DRY':
+        engine.setTrackDelaySend(trackIdx,0);
+        engine.setTrackReverbSend(trackIdx,0);
+        break;
+      case 'WET':
+        engine.setTrackDelaySend(trackIdx,0.5);
+        engine.setTrackReverbSend(trackIdx,0.6);
+        break;
+      case 'PUMP':
+        engine.setTrackDelaySend(trackIdx,0.3);
+        engine.setTrackReverbSend(trackIdx,0.2);
+        break;
+      case 'NORMAL':
+      default:
+        // Restore defaults
+        const defDelay=(trackIdx===0)?0:(trackIdx===1)?0.1:0.3;
+        const defReverb=(trackIdx===0)?0:(trackIdx===1)?0.05:(trackIdx===5)?0.5:0.2;
+        engine.setTrackDelaySend(trackIdx,defDelay);
+        engine.setTrackReverbSend(trackIdx,defReverb);
+        break;
+    }
+  }
+  toast(trackNames[trackIdx].toUpperCase()+' FX: '+mode);
 }
 
 // ============================================================
