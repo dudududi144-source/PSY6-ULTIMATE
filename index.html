@@ -1320,13 +1320,17 @@ function audioBufferToWav(buffer){
 // UI — LCD, Sections, Sequencer, Knobs, XY Pad, Pads
 // ============================================================
 function updateLCD(){
+  const lcdSection=document.getElementById('lcdSection');
+  const lcdInfo=document.getElementById('lcdInfo');
+  if(!lcdSection||!lcdInfo)return;
   const sectionBars=SECTION_BARS[SECTIONS[currentSection]]||8;
-  document.getElementById('lcdSection').textContent=SECTIONS[currentSection];
-  document.getElementById('lcdInfo').textContent='BAR '+(currentBar+1)+'/'+sectionBars+' | BPM '+currentBpm+' | VAR '+currentVariation;
+  lcdSection.textContent=SECTIONS[currentSection];
+  lcdInfo.textContent='BAR '+(currentBar+1)+'/'+sectionBars+' | BPM '+Math.round(currentBpm)+' | VAR '+currentVariation;
 }
 
 function updateSectionBtns(){
   const container=document.getElementById('sectionBtns');
+  if(!container)return;
   container.innerHTML='';
   SECTIONS.forEach((s,i)=>{
     const btn=document.createElement('button');
@@ -1346,6 +1350,7 @@ function updateStepUI(step){
 
 function updateSeqUI(){
   const grid=document.getElementById('seqGrid');
+  if(!grid)return;
   grid.innerHTML='';
   const trackNames=['KICK','BASS','PERC','LEAD','ARP','PAD'];
   const patternKeys=['kick','bass','perc','lead','arp','pad'];
@@ -1574,6 +1579,7 @@ function initXYPad(){
 // --- Genre + Preset Chips ---
 function buildGenreChips(){
   const container=document.getElementById('genreChips');
+  if(!container)return;
   container.innerHTML='';
   GENRES.forEach(g=>{
     const chip=document.createElement('div');
@@ -1613,6 +1619,7 @@ function buildGenreChips(){
 
 function buildPresetChips(){
   const container=document.getElementById('presetChips');
+  if(!container)return;
   container.innerHTML='';
   const cats=['bass','lead','arp','pad'];
   cats.forEach(cat=>{
@@ -1731,7 +1738,7 @@ function handleMIDI(msg){
           midiClockDetectedBpm=clamp(Math.round(bpm),60,200);
           // Smooth update of currentBpm
           if(Math.abs(midiClockDetectedBpm-currentBpm)>=1){
-            currentBpm=currentBpm*0.7+midiClockDetectedBpm*0.3;
+            currentBpm=clamp(currentBpm*0.7+midiClockDetectedBpm*0.3,60,200);
             knobValues.bpm=currentBpm;
             updateKnob(KNOBS[0]);
             updateLCD();
@@ -1943,7 +1950,7 @@ function serializeState(){
     brainMode:brainMode,
     variation:currentVariation,
     knobValues:knobValues,
-    patterns:patterns,
+    patterns:JSON.parse(JSON.stringify(patterns)),
     grammars:{
       bass:{transitions:grammars.bass.transitions,total:grammars.bass.total,lastPc:grammars.bass.lastPc},
       melodic:{intervals:grammars.melodic.intervals,total:grammars.melodic.total,lastMidi:grammars.melodic.lastMidi,contourDir:grammars.melodic.contourDir},
@@ -2668,7 +2675,7 @@ function setMIDILearnTarget(knobId){
 // PRESET MORPHER — Blend two presets
 // ============================================================
 function morphPresets(cat){
-  const presets=LIB[cat].filter(p=>p.genre===currentGenre);
+  const presets=LIB[cat].filter(p=>p.genre===(currentGenre||'PSYTRANCE'));
   if(presets.length<2){toast('NEED 2+ PRESETS TO MORPH');return}
   const a=pick(presets);
   let b=pick(presets);
@@ -2881,7 +2888,7 @@ function rotateTrackPattern(trackIdx,direction){
 function randomizeAllPresets(){
   const cats=['bass','lead','arp','pad'];
   cats.forEach(cat=>{
-    const options=LIB[cat].filter(p=>p.genre===currentGenre);
+    const options=LIB[cat].filter(p=>p.genre===(currentGenre||'PSYTRANCE'));
     if(options.length>0){
       currentPreset[cat]=pick(options);
     }
@@ -2960,7 +2967,7 @@ function generateAllVariations(){
 function handleProgramChange(program){
   const cats=['bass','lead','arp','pad'];
   const cat=cats[program%4]; // Cycle through categories
-  const options=LIB[cat].filter(p=>p.genre===currentGenre);
+  const options=LIB[cat].filter(p=>p.genre===(currentGenre||'PSYTRANCE'));
   if(options.length===0)return;
   const idx=Math.floor(program/4)%options.length;
   currentPreset[cat]=options[idx];
@@ -3024,7 +3031,7 @@ function applyPresetChain(){
   if(presetChainIndex>10000)presetChainIndex=0; // prevent overflow
   const cats=['bass','lead','arp','pad'];
   const cat=cats[presetChainIndex%4];
-  const options=LIB[cat].filter(p=>p.genre===currentGenre);
+  const options=LIB[cat].filter(p=>p.genre===(currentGenre||'PSYTRANCE'));
   if(options.length>0){
     currentPreset[cat]=options[presetChainIndex%options.length];
     buildPresetChips();
@@ -3338,7 +3345,7 @@ function adjustTrackDelayOffset(trackIdx,delta){
 // PRESET BLEND — Blend current preset with a random one
 // ============================================================
 function blendPresets(cat){
-  const options=LIB[cat].filter(function(p){return p.genre===currentGenre});
+  const options=LIB[cat].filter(function(p){return p.genre===(currentGenre||'PSYTRANCE')});
   if(options.length<2){toast('NEED 2+ PRESETS TO BLEND');return}
   
   const a=currentPreset[cat]||options[0];
@@ -3410,7 +3417,7 @@ function updateBPMRamp(){
     toast('BPM RAMP COMPLETE: '+Math.round(bpmRampTarget)+' BPM');
   } else {
     const progress=bpmRampCurrentBar/bpmRampBars;
-    currentBpm=bpmRampStart+(bpmRampTarget-bpmRampStart)*progress;
+    currentBpm=clamp(bpmRampStart+(bpmRampTarget-bpmRampStart)*progress,60,200);
   }
   knobValues.bpm=currentBpm;
   updateKnob(KNOBS[0]);
@@ -3705,7 +3712,7 @@ function checkRandomWalk(){
     // Pick a random category and move to a nearby preset
     const cats=['bass','lead','arp','pad'];
     const cat=pick(cats);
-    const options=LIB[cat].filter(function(p){return p.genre===currentGenre});
+    const options=LIB[cat].filter(function(p){return p.genre===(currentGenre||'PSYTRANCE')});
     if(options.length>1){
       const currentIdx=options.findIndex(function(p){return currentPreset[cat]&&p.id===currentPreset[cat].id});
       // Move to adjacent preset (random walk)
