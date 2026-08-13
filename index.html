@@ -88,6 +88,7 @@ body.perf-mode .knob{width:72px;height:72px}
         <button onclick="reseed()">&#8635; VARIATION (V)</button>
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="randomizeSound()">&#127922; SOUND</button>
+        <button onclick="cycleArpMode()" id="btnArpMode">&#8691; ARP: UP</button>
         <button onclick="toggleMidiClock()" id="btnMidiClock">&#128337; CLOCK: OFF</button>
         <button onclick="togglePerfMode()" id="btnPerfMode">&#127917; PERF</button>
         <button onclick="recordLoop()">&#9679; LOOP</button>
@@ -193,6 +194,11 @@ const CHORD_PROGRESSIONS = {
 let currentChordProgression = CHORD_PROGRESSIONS['i-VI-III-VII'];
 let currentChordIndex = 0;
 let currentChordRoot = 0; // scale degree of current chord root
+
+// Arpeggiator modes
+const ARP_MODES = ['UP','DOWN','UP-DOWN','RANDOM','CHORD'];
+let currentArpMode = 'UP';
+let arpDirection = 1; // for UP-DOWN mode
 
 // --- State ---
 let audioCtx=null, engine=null, isPlaying=false;
@@ -897,9 +903,8 @@ function scheduleStep(step,time){
       engine.triggerSynth(time,leadNote,currentPreset.lead,stepDur*1.5,3);
       musicalState.leadLastMidi=leadNote;
       updateGrammars('lead',step,leadNote);
-    } else if(t===4){ // ARP
-      const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
-      const arpNote=72+scale[(ev.note||0)%scale.length];
+    } else if(t===4){ // ARP — chord-aware arpeggiator
+      const arpNote=60+getArpNote(step);
       engine.triggerSynth(time,arpNote,currentPreset.arp,stepDur*0.8,4);
     } else if(t===5){ // PAD — plays current chord from progression
       const chordNotes=getCurrentChordNotes();
@@ -1465,6 +1470,7 @@ document.addEventListener('keydown',e=>{
     case 'd':case 'D':patterns.kick=makePatterns(seed).kick;updateSeqUI();toast('DRUM pattern regenerated');break;
     case 'h':case 'H':applyBestCandidate();toast('MELODY generated');break;
     case 'z':case 'Z':patterns.arp=makePatterns(seed+1).arp;updateSeqUI();toast('ARP pattern regenerated');break;
+    case 'a':case 'A':cycleArpMode();break;
     case 'r':case 'R':recordLoop();break;
     case 's':case 'S':randomizeSound();break;
     case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':
@@ -1850,6 +1856,47 @@ function getCurrentChordNotes(){
   const third=scale[(degree+2)%scale.length];
   const fifth=scale[(degree+4)%scale.length];
   return [root, third, fifth];
+}
+
+// ============================================================
+// ARPEGGIATOR ENGINE — Chord-aware arp patterns
+// ============================================================
+function getArpNote(step){
+  const chordNotes=getCurrentChordNotes();
+  const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+  // Extend chord with octave duplicates for longer arp sequences
+  const arpSeq=[
+    chordNotes[0], chordNotes[1], chordNotes[2],
+    chordNotes[0]+12, chordNotes[1]+12, chordNotes[2]+12,
+    chordNotes[0]+24
+  ];
+  const len=arpSeq.length;
+  
+  switch(currentArpMode){
+    case 'UP':
+      return arpSeq[step%len];
+    case 'DOWN':
+      return arpSeq[(len-1-(step%len))];
+    case 'UP-DOWN':
+      const cycle=step%(len*2-2);
+      const idx=cycle<len?cycle:(len*2-2-cycle);
+      return arpSeq[idx];
+    case 'RANDOM':
+      return arpSeq[Math.floor(rand()*len)];
+    case 'CHORD':
+      // Play chord tones on strong beats
+      return chordNotes[step%3];
+    default:
+      return arpSeq[step%len];
+  }
+}
+
+function cycleArpMode(){
+  const idx=(ARP_MODES.indexOf(currentArpMode)+1)%ARP_MODES.length;
+  currentArpMode=ARP_MODES[idx];
+  const btn=document.getElementById('btnArpMode');
+  if(btn)btn.innerHTML='&#8691; ARP: '+currentArpMode;
+  toast('ARP MODE: '+currentArpMode);
 }
 
 // ============================================================
