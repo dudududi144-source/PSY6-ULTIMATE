@@ -1100,6 +1100,15 @@ function onSectionChange(){
   if(currentSection>0&&!sectionLoopEnabled){
     triggerFill();
   }
+  // Trigger transition FX
+  if(transitionFXEnabled){
+    const sectionName=SECTIONS[currentSection];
+    if(sectionName==='DROP'||sectionName==='DROP2'){
+      playTransitionFX('impact');
+    } else if(sectionName==='RISER'){
+      playTransitionFX('riser');
+    }
+  }
   
   updateLCD();
   updateSectionBtns();
@@ -1304,6 +1313,20 @@ function updateSeqUI(){
       fxBtn.title='FX mode: '+TRACK_FX_MODES[trackFxModes[t]];
     };
     row.appendChild(fxBtn);
+    
+    // Pan button
+    const panBtn=document.createElement('div');
+    panBtn.className='seq-mute';
+    panBtn.style.borderColor='var(--accent3)';
+    panBtn.textContent='C';
+    panBtn.title='Pan: Center (click to cycle L/R)';
+    panBtn.onclick=()=>{
+      cycleTrackPan(t);
+      const p=trackPans[t];
+      panBtn.textContent=p===0?'C':(p<0?'L':'R');
+      panBtn.title='Pan: '+(p===0?'Center':(p<0?'Left '+Math.round(Math.abs(p)*100)+'%':'Right '+Math.round(p*100)+'%'));
+    };
+    row.appendChild(panBtn);
     
     const label=document.createElement('div');
     label.className='seq-label';
@@ -1783,6 +1806,9 @@ document.addEventListener('keydown',e=>{
     case '4':togglePresetEvolve();break;
     case '5':rampUp();break;
     case '6':rampDown();break;
+    case 'escape':toggleTransitionFX();break;
+    case 'delete':savePresetSnapshot();break;
+    case 'insert':loadPresetSnapshot();break;
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -3339,6 +3365,133 @@ function checkPresetEvolve(){
       }
     }
   }
+}
+
+// ============================================================
+// TRACK PAN — Stereo panning per track
+// ============================================================
+let trackPans=[0,0,0,0,0,0]; // -1 (left) to 1 (right)
+
+function cycleTrackPan(trackIdx){
+  const panLevels=[0,-0.5,0.5,-1,1]; // center, left, right, full-left, full-right
+  const currentIdx=panLevels.findIndex(function(p){return Math.abs(p-trackPans[trackIdx])<0.01});
+  const nextIdx=(currentIdx+1)%panLevels.length;
+  trackPans[trackIdx]=panLevels[nextIdx];
+  
+  if(engine&&engine.trackBuses[trackIdx]){
+    // Add StereoPannerNode if not exists
+    if(!engine.trackPanners){engine.trackPanners=[]}
+    if(!engine.trackPanners[trackIdx]){
+      const panner=audioCtx.createStereoPanner();
+      engine.trackBuses[trackIdx].disconnect();
+      engine.trackBuses[trackIdx].connect(panner);
+      panner.connect(engine.master);
+      engine.trackPanners[trackIdx]=panner;
+    }
+    engine.trackPanners[trackIdx].pan.value=trackPans[trackIdx];
+  }
+  
+  const trackNames=['KICK','BASS','PERC','LEAD','ARP','PAD'];
+  const panLabel=trackPans[trackIdx]===0?'C':(trackPans[trackIdx]<0?'L'+Math.round(Math.abs(trackPans[trackIdx])*100):'R'+Math.round(trackPans[trackIdx]*100));
+  toast(trackNames[trackIdx]+' PAN: '+panLabel);
+}
+
+// ============================================================
+// SECTION TRANSITION FX — Auto riser/impact on section changes
+// ============================================================
+let transitionFXEnabled=true;
+
+function toggleTransitionFX(){
+  transitionFXEnabled=!transitionFXEnabled;
+  toast('TRANSITION FX: '+(transitionFXEnabled?'ON':'OFF'));
+}
+
+function playTransitionFX(type){
+  if(!audioCtx||!engine)return;
+  const now=audioCtx.currentTime;
+  
+  if(type==='riser'){
+    // White noise riser (1 bar before DROP)
+    const dur=60/currentBpm*4; // 1 bar
+    const bufLen=audioCtx.sampleRate*dur;
+    const buf=audioCtx.createBuffer(1,bufLen,audioCtx.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++){
+      data[i]=(Math.random()*2-1)*(i/bufLen); // increasing volume
+    }
+    const src=audioCtx.createBufferSource();
+    src.buffer=buf;
+    const filter=audioCtx.createBiquadFilter();
+    filter.type='highpass';
+    filter.frequency.setValueAtTime(500,now);
+    filter.frequency.exponentialRampToValueAtTime(8000,now+dur);
+    const gain=audioCtx.createGain();
+    gain.gain.setValueAtTime(0,now);
+    gain.gain.linearRampToValueAtTime(0.3,now+dur);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(engine.master);
+    src.start(now);
+    src.stop(now+dur);
+  } else if(type==='impact'){
+    // Deep impact hit (on DROP)
+    const osc=audioCtx.createOscillator();
+    osc.type='sine';
+    osc.frequency.setValueAtTime(80,now);
+    osc.frequency.exponentialRampToValueAtTime(30,now+0.5);
+    const gain=audioCtx.createGain();
+    gain.gain.setValueAtTime(0.5,now);
+    gain.gain.exponentialRampToValueAtTime(0.001,now+0.8);
+    osc.connect(gain);
+    gain.connect(engine.master);
+    osc.start(now);
+    osc.stop(now+0.8);
+    // Noise burst
+    const bufLen=audioCtx.sampleRate*0.3;
+    const buf=audioCtx.createBuffer(1,bufLen,audioCtx.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++){
+      data[i]=(Math.random()*2-1)*Math.pow(1-i/bufLen,2);
+    }
+    const src=audioCtx.createBufferSource();
+    src.buffer=buf;
+    const nGain=audioCtx.createGain();
+    nGain.gain.setValueAtTime(0.3,now);
+    src.connect(nGain);
+    nGain.connect(engine.master);
+    src.start(now);
+  }
+}
+
+// ============================================================
+// PRESET SNAPSHOT — Save/restore preset state
+// ============================================================
+let presetSnapshots={};
+
+function savePresetSnapshot(){
+  const snapshot={
+    bass:currentPreset.bass?JSON.parse(JSON.stringify(currentPreset.bass)):null,
+    lead:currentPreset.lead?JSON.parse(JSON.stringify(currentPreset.lead)):null,
+    arp:currentPreset.arp?JSON.parse(JSON.stringify(currentPreset.arp)):null,
+    pad:currentPreset.pad?JSON.parse(JSON.stringify(currentPreset.pad)):null,
+    savedAt:Date.now()
+  };
+  presetSnapshots['last']=snapshot;
+  toast('PRESET SNAPSHOT SAVED');
+}
+
+function loadPresetSnapshot(){
+  if(!presetSnapshots['last']){
+    toast('NO SNAPSHOT TO LOAD');
+    return;
+  }
+  const snapshot=presetSnapshots['last'];
+  if(snapshot.bass)currentPreset.bass=snapshot.bass;
+  if(snapshot.lead)currentPreset.lead=snapshot.lead;
+  if(snapshot.arp)currentPreset.arp=snapshot.arp;
+  if(snapshot.pad)currentPreset.pad=snapshot.pad;
+  buildPresetChips();
+  toast('PRESET SNAPSHOT LOADED');
 }
 
 // ============================================================
