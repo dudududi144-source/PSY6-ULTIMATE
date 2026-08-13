@@ -948,6 +948,8 @@ function scheduler(){
       advanceChord();
       // Advance preset chain if enabled
       applyPresetChain();
+      // Check auto-morph
+      checkAutoMorph();
       // Check section advancement
       const sectionBars=SECTION_BARS[SECTIONS[currentSection]]||8;
       if(currentBar>=sectionBars){
@@ -1611,10 +1613,13 @@ function handleMIDI(msg){
   if(cmd===0x90&&data2>0){ // Note On
     const midi=data1;
     const vel=data2/127;
+    // Check if this is a mapped action note (low register)
+    if(handleMIDINoteAction(midi))return;
     if(!audioCtx)initAudio();
     if(audioCtx.state==='suspended')audioCtx.resume();
     const preset=currentPreset.lead||LIB.lead[0];
     engine.triggerSynth(audioCtx.currentTime+0.01,midi,preset,0.3,3);
+    sendMIDINoteOut(midi,vel,0.3);
     musicalState.leadLastMidi=midi;
     // LEARN: MIDI performance teaches the melodic grammar
     updateGrammars('lead',-1,midi);
@@ -1742,6 +1747,8 @@ document.addEventListener('keydown',e=>{
     case 'i':case 'I':copyTrackPattern(3);break; // copy LEAD
     case 'o':case 'O':pasteTrackPattern(4);break; // paste to ARP
     case 'p':case 'P':togglePresetChain();break;
+    case 'j':case 'J':swapTrackPatterns(3,4);break; // swap LEAD <-> ARP
+    case 'm':case 'M':toggleAutoMorph();break;
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -2868,6 +2875,74 @@ function addStepRepeat(trackIdx,stepIdx){
   ev.on=true;
   updateSeqUI();
   toast('REPEAT: '+trackName.toUpperCase()+' step '+stepIdx+' x'+ev.repeat);
+}
+
+// ============================================================
+// PATTERN SWAP — Exchange patterns between two tracks
+// ============================================================
+function swapTrackPatterns(trackIdx1,trackIdx2){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const name1=trackNames[trackIdx1];
+  const name2=trackNames[trackIdx2];
+  if(!patterns[name1]||!patterns[name2])return;
+  pushUndo();
+  const temp=JSON.parse(JSON.stringify(patterns[name1]));
+  patterns[name1]=JSON.parse(JSON.stringify(patterns[name2]));
+  patterns[name2]=temp;
+  updateSeqUI();
+  toast('SWAPPED: '+name1.toUpperCase()+' <-> '+name2.toUpperCase());
+}
+
+// ============================================================
+// MIDI NOTE MAPPING — Trigger actions from specific MIDI notes
+// ============================================================
+const MIDI_NOTE_ACTIONS={
+  24:'fill',      // C0: trigger fill
+  25:'variation', // C#0: new variation
+  26:'reseed',    // D0: reseed
+  27:'chord',     // D#0: new chord progression
+  28:'arpMode',   // E0: cycle arp mode
+  29:'bassMode',  // F0: cycle bass mode
+  30:'humanize',  // F#0: cycle humanize
+  31:'perfMode'   // G0: toggle performance mode
+};
+
+function handleMIDINoteAction(midiNote){
+  const action=MIDI_NOTE_ACTIONS[midiNote];
+  if(!action)return false;
+  switch(action){
+    case 'fill':triggerFill();break;
+    case 'variation':generateAllVariations();break;
+    case 'reseed':reseed();break;
+    case 'chord':generateChordProgression();break;
+    case 'arpMode':cycleArpMode();break;
+    case 'bassMode':cycleBassMode();break;
+    case 'humanize':cycleHumanize();break;
+    case 'perfMode':togglePerfMode();break;
+  }
+  return true;
+}
+
+// ============================================================
+// AUTO-MORPH — Automatically morph presets every 8 bars
+// ============================================================
+let autoMorphEnabled=false;
+let autoMorphCounter=0;
+
+function toggleAutoMorph(){
+  autoMorphEnabled=!autoMorphEnabled;
+  autoMorphCounter=0;
+  toast('AUTO-MORPH: '+(autoMorphEnabled?'ON — morphing every 8 bars':'OFF'));
+}
+
+function checkAutoMorph(){
+  if(!autoMorphEnabled)return;
+  autoMorphCounter++;
+  if(autoMorphCounter>=8){
+    autoMorphCounter=0;
+    const cat=pick(['bass','lead','arp','pad']);
+    morphPresets(cat);
+  }
 }
 
 // ============================================================
