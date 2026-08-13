@@ -149,6 +149,10 @@ body.perf-mode .knob{width:72px;height:72px}
     </div>
     <div class="panel">
       <div class="panel-title">SOUND SELECT</div>
+      <input type="text" id="presetSearch" placeholder="Search presets..." 
+        style="width:100%;padding:6px 10px;background:var(--panel2);border:1px solid var(--border);
+        border-radius:4px;color:var(--text);font-family:inherit;font-size:11px;margin-bottom:8px;outline:none"
+        oninput="presetSearchQuery=this.value.toLowerCase();buildPresetChips()">
       <div class="style-chips" id="presetChips"></div>
       <div style="margin-top:8px;display:flex;gap:6px">
         <button class="chip" onclick="exportPresets()">&#8681; PRESETS</button>
@@ -1048,6 +1052,8 @@ function scheduleStep(step,time){
 function onSectionChange(){
   // Auto-save current section's pattern before switching
   autoSaveSectionPattern();
+  // Apply BPM automation if enabled
+  applySectionBPM();
   // Load the new section's pattern if it exists
   const newSectionName=SECTIONS[currentSection];
   if(sectionPatterns[newSectionName]){
@@ -1466,7 +1472,11 @@ function buildPresetChips(){
   container.innerHTML='';
   const cats=['bass','lead','arp','pad'];
   cats.forEach(cat=>{
-    LIB[cat].filter(p=>p.genre===currentGenre).forEach(p=>{
+    LIB[cat].filter(p=>{
+      if(p.genre!==currentGenre)return false;
+      if(presetSearchQuery&&!p.name.toLowerCase().includes(presetSearchQuery)&&!p.id.toLowerCase().includes(presetSearchQuery))return false;
+      return true;
+    }).forEach(p=>{
       const chip=document.createElement('div');
       chip.className='chip'+(currentPreset[cat]&&currentPreset[cat].id===p.id?' active':'');
       const star=presetFavorites.has(p.id)?'★ ':'';
@@ -1702,6 +1712,8 @@ document.addEventListener('keydown',e=>{
     case ',':case '<':nudgeAll(-1);break;
     case '.':case '>':nudgeAll(1);break;
     case 'q':case 'Q':duplicatePattern(3);break; // duplicate LEAD to ARP
+    case 'x':case 'X':quantizePatterns();break;
+    case 'y':case 'Y':toggleBPMAutomation();break;
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -2550,6 +2562,7 @@ const TRACK_NAMES_SHORT=['KICK','BASS','PERC','LEAD','ARP','PAD'];
 // PRESET FAVORITES — Mark presets as favorites
 // ============================================================
 let presetFavorites=new Set();
+let presetSearchQuery='';
 
 function toggleFavorite(presetId){
   if(presetFavorites.has(presetId)){
@@ -2586,6 +2599,56 @@ function duplicatePattern(trackIdx){
   }
   updateSeqUI();
   toast('DUPLICATED: '+src.toUpperCase()+' -> '+dst.toUpperCase());
+}
+
+// ============================================================
+// GLOBAL QUANTIZE — Snap patterns to musical grid
+// ============================================================
+function quantizePatterns(){
+  pushUndo();
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  let changes=0;
+  trackNames.forEach(name=>{
+    if(!patterns[name])return;
+    for(let i=0;i<16;i++){
+      const ev=patterns[name][i];
+      // Quantize velocity to nearest 0.25
+      if(ev.vel!==undefined){
+        const quantized=Math.round(ev.vel*4)/4;
+        if(Math.abs(quantized-ev.vel)>0.01){
+          ev.vel=quantized;
+          changes++;
+        }
+      }
+    }
+  });
+  updateSeqUI();
+  toast('QUANTIZED: '+changes+' velocity values snapped');
+}
+
+// ============================================================
+// BPM AUTOMATION — BPM changes per section
+// ============================================================
+let bpmAutomationEnabled=false;
+const SECTION_BPM_OFFSET={INTRO:-5,BUILD:0,DROP:0,BREAK:-10,RISER:5,DROP2:0,LOOP:0};
+
+function toggleBPMAutomation(){
+  bpmAutomationEnabled=!bpmAutomationEnabled;
+  if(bpmAutomationEnabled){
+    applySectionBPM();
+  }
+  toast('BPM AUTOMATION: '+(bpmAutomationEnabled?'ON':'OFF'));
+}
+
+function applySectionBPM(){
+  if(!bpmAutomationEnabled)return;
+  const offset=SECTION_BPM_OFFSET[SECTIONS[currentSection]]||0;
+  const baseBpm=knobValues.bpm||145;
+  const newBpm=clamp(baseBpm+offset,60,200);
+  if(Math.abs(newBpm-currentBpm)>=1){
+    currentBpm=newBpm;
+    updateLCD();
+  }
 }
 
 // ============================================================
