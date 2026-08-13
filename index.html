@@ -134,8 +134,8 @@ body.perf-mode .knob{width:72px;height:72px}
     <div class="panel">
       <div class="panel-title">OUTPUT</div>
       <div class="viz-container">
-        <canvas id="specCanvas"></canvas>
-        <canvas id="waveCanvas"></canvas>
+        <canvas id="specCanvas">Spectrum visualizer (requires canvas support)</canvas>
+        <canvas id="waveCanvas">Waveform visualizer (requires canvas support)</canvas>
       </div>
     </div>
   </div>
@@ -182,7 +182,7 @@ body.perf-mode .knob{width:72px;height:72px}
       <div style="font-size:10px;color:var(--text-dim)" id="brainStatus">
         Mode: GENERATIVE | Candidates/bar: 5 | Last score: —
       </div>
-      <canvas id="grammarCanvas" width="280" height="50" style="width:100%;height:50px;background:var(--panel2);border-radius:4px;margin-top:8px"></canvas>
+      <canvas id="grammarCanvas" width="280" height="50" style="width:100%;height:50px;background:var(--panel2);border-radius:4px;margin-top:8px">Grammar visualizer (requires canvas support)</canvas>
       <div style="margin-top:8px;display:flex;gap:6px">
         <button class="chip" onclick="triggerMacroBurst('SPACE')">&#127754; SPACE</button>
         <button class="chip" onclick="triggerMacroBurst('ENERGY')">&#9889; ENERGY</button>
@@ -360,6 +360,16 @@ let musicalState={leadLastMidi:60,bassLastMidi:36,contourMomentum:0,energy:0.5,r
 let lastCandidateScore=0, xyCutoff=1500, xyRes=5;
 
 // --- Seeded Random ---
+
+// Safe JSON.parse wrapper — returns null on error
+function safeParse(str,fallback){
+  try{
+    return JSON.parse(str);
+  }catch(e){
+    return fallback!==undefined?fallback:null;
+  }
+}
+
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 let rng=mulberry32(seed);
 function rand(){return rng()}
@@ -1682,20 +1692,20 @@ function triggerPad(pad){
 // ============================================================
 function initMIDI(){
   if(!navigator.requestMIDIAccess){
-    console.log('Web MIDI not supported');
+    
     return;
   }
   navigator.requestMIDIAccess().then(access=>{
     function connectInputs(){
       for(const input of access.inputs.values()){
         input.onmidimessage=handleMIDI;
-        console.log('MIDI input connected:',input.name);
+        
       }
     }
     function connectOutputs(){
       for(const output of access.outputs.values()){
         midiOutput=output;
-        console.log('MIDI output connected:',output.name);
+        
         break; // use first available output
       }
     }
@@ -1703,7 +1713,7 @@ function initMIDI(){
     connectOutputs();
     // Handle hot-plug MIDI devices
     access.onstatechange=function(e){
-      console.log('MIDI state change:',e.port.name,e.port.state);
+      
       connectInputs();
       connectOutputs();
       if(e.port.type==='input'&&e.port.state==='connected'){
@@ -1713,7 +1723,7 @@ function initMIDI(){
     // Show first connected input
     const firstInput=access.inputs.values().next().value;
     if(firstInput)toast('MIDI IN: '+firstInput.name);
-  }).catch(e=>console.log('MIDI access denied'));
+  }).catch(e=>{});
 }
 
 function handleMIDI(msg){
@@ -1971,7 +1981,7 @@ function saveProject(name){
     const slotKey=STORAGE_KEY+':'+state.name;
     localStorage.setItem(slotKey,JSON.stringify(state));
     // Update project registry
-    let registry=JSON.parse(localStorage.getItem(STORAGE_KEY+':registry')||'[]');
+    let registry=safeParse(localStorage.getItem(STORAGE_KEY+':registry'),[]);
     if(!registry.includes(state.name))registry.push(state.name);
     localStorage.setItem(STORAGE_KEY+':registry',JSON.stringify(registry));
     toast('SAVED: "'+state.name+'" — '+(grammars.bass.total+grammars.melodic.total)+' grammar entries');
@@ -3754,9 +3764,9 @@ function init(){
       }
       if(state.musicalState)Object.assign(musicalState,state.musicalState);
       updateBrainStatus();
-      console.log('Restored grammar state:',grammars.bass.total,'bass +',grammars.melodic.total,'melodic entries');
+      
     }
-  }catch(e){console.log('No saved state to restore')}
+  }catch(e){}
   
   // Auto-save while playing
   startAutoSave();
@@ -3764,11 +3774,11 @@ function init(){
   // Auto-update LCD
   setInterval(()=>{if(isPlaying)updateLCD()},200);
   
-  console.log('PSY6 ULTIMATE initialized');
-  console.log('  Synth voices:',SYNTH_VOICES);
-  console.log('  Drum voices:',DRUM_VOICES);
-  console.log('  Genres:',GENRES.join(', '));
-  console.log('  Scales:',Object.keys(SCALES).join(', '));
+  
+  
+  
+  
+  
 }
 
 // Start when DOM ready
