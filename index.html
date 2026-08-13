@@ -89,7 +89,8 @@ body.perf-mode .knob{width:72px;height:72px}
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="randomizeSound()">&#127922; SOUND</button>
         <button onclick="cycleArpMode()" id="btnArpMode">&#8691; ARP: UP</button>
-        <button onclick="toggleMidiClock()" id="btnMidiClock">&#128337; CLOCK: OFF</button>
+        <button onclick="toggleMidiClock()" id="btnMidiClock">&#128337; CLOCK IN</button>
+        <button onclick="toggleMIDIOut()" id="btnMidiOut">&#128228; MIDI OUT</button>
         <button onclick="togglePerfMode()" id="btnPerfMode">&#127917; PERF</button>
         <button onclick="recordLoop()">&#9679; LOOP</button>
         <button id="btnLiveRec" onclick="toggleLiveRecording()">&#128308; LIVE REC</button>
@@ -205,6 +206,7 @@ let audioCtx=null, engine=null, isPlaying=false;
 let currentBpm=145, currentSwing=0, currentSection=0, currentBar=0, currentStep=0;
 let currentVariation=0, schedulerInterval=null, nextStepTime=0;
 let seed=Date.now(), patterns={}, trackMutes=[false,false,false,false,false,false];
+let trackSolos=[false,false,false,false,false,false];
 let brainMode='GENERATIVE';
 let musicalState={leadLastMidi:60,bassLastMidi:36,contourMomentum:0,energy:0.5,rootPc:0};
 let lastCandidateScore=0, xyCutoff=1500, xyRes=5;
@@ -268,6 +270,9 @@ let midiClockCount=0;
 let midiClockLastTime=0;
 let midiClockIntervals=[];
 let midiClockDetectedBpm=0;
+// MIDI Output state
+let midiOutput=null;
+let midiOutEnabled=false;
 let currentPreset={bass:LIB.bass[0],lead:LIB.lead[0],arp:LIB.arp[0],pad:LIB.pad[0]};
 let currentDrumPreset=LIB.drum[0];
 
@@ -820,6 +825,8 @@ function scheduler(){
   const stepDur=60/currentBpm/4; // 16th note duration
   // Keep delay time synced to BPM (dotted 8th = 3 * 16th)
   if(engine)engine.setDelayTime(stepDur*3);
+  // Send MIDI clock (24 ppq = every 16th note gets 6 clocks, simplified: send per step)
+  sendMIDIClockOut();
   while(nextStepTime<audioCtx.currentTime+0.05){
     // Swing only delays offbeat (odd) steps; grid itself stays steady
     const swingOffset=(currentStep%2===1)?currentSwing*stepDur*0.45:0;
@@ -850,8 +857,11 @@ function scheduleStep(step,time){
   const trackNames=['kick','bass','perc','lead','arp','pad'];
   const stepDur=60/currentBpm/4;
   
+  // Determine if any track is soloed
+  const anySolo=trackSolos.some(s=>s);
   for(let t=0;t<6;t++){
     if(trackMutes[t])continue;
+    if(anySolo&&!trackSolos[t])continue; // only play soloed tracks
     const trackName=trackNames[t];
     const pat=patterns[trackName];
     if(!pat||!pat[step])continue;
@@ -901,6 +911,7 @@ function scheduleStep(step,time){
         leadNote=60+scale[(ev.note||0)%scale.length];
       }
       engine.triggerSynth(time,leadNote,currentPreset.lead,stepDur*1.5,3);
+      sendMIDINoteOut(leadNote,ev.vel||0.7,1.5); // MIDI Out
       musicalState.leadLastMidi=leadNote;
       updateGrammars('lead',step,leadNote);
     } else if(t===4){ // ARP — chord-aware arpeggiator
@@ -1086,6 +1097,13 @@ function updateSeqUI(){
     mute.textContent='M';
     mute.onclick=()=>{trackMutes[t]=!trackMutes[t];mute.classList.toggle('muted')};
     row.appendChild(mute);
+    
+    const solo=document.createElement('div');
+    solo.className='seq-mute'+(trackSolos[t]?' muted':'');
+    solo.textContent='S';
+    solo.style.borderColor='var(--accent3)';
+    solo.onclick=()=>{trackSolos[t]=!trackSolos[t];solo.classList.toggle('muted');updateSeqUI()};
+    row.appendChild(solo);
     
     const label=document.createElement('div');
     label.className='seq-label';
@@ -1317,7 +1335,13 @@ function initMIDI(){
     for(const input of access.inputs.values()){
       input.onmidimessage=handleMIDI;
       console.log('MIDI input connected:',input.name);
-      toast('MIDI: '+input.name);
+      toast('MIDI IN: '+input.name);
+    }
+    // Capture first output port for MIDI Out
+    for(const output of access.outputs.values()){
+      midiOutput=output;
+      console.log('MIDI output connected:',output.name);
+      break; // use first available output
     }
   }).catch(e=>console.log('MIDI access denied'));
 }
@@ -1897,6 +1921,39 @@ function cycleArpMode(){
   const btn=document.getElementById('btnArpMode');
   if(btn)btn.innerHTML='&#8691; ARP: '+currentArpMode;
   toast('ARP MODE: '+currentArpMode);
+}
+
+// ============================================================
+// MIDI OUT — Send notes and clock to external gear
+// ============================================================
+function sendMIDINoteOut(midi,vel,durationBeats){
+  if(!midiOutEnabled||!midiOutput)return;
+  try{
+    const noteOn=[0x90,midi&0x7f,Math.round(vel*127)&0x7f];
+    const noteOff=[0x80,midi&0x7f,0];
+    midiOutput.send(noteOn);
+    const durMs=(durationBeats||0.25)*(60000/currentBpm);
+    setTimeout(()=>{try{midiOutput.send(noteOff)}catch(e){}},durMs);
+  }catch(e){}
+}
+
+function sendMIDIClockOut(){
+  if(!midiOutEnabled||!midiOutput)return;
+  try{midiOutput.send([0xF8])}catch(e){}
+}
+
+function toggleMIDIOut(){
+  midiOutEnabled=!midiOutEnabled;
+  const btn=document.getElementById('btnMidiOut');
+  if(btn){
+    btn.innerHTML='&#128228; MIDI OUT: '+(midiOutEnabled?'ON':'OFF');
+    btn.classList.toggle('active',midiOutEnabled);
+  }
+  if(midiOutEnabled&&!midiOutput){
+    toast('MIDI OUT: no output device found');
+  } else {
+    toast('MIDI OUT: '+(midiOutEnabled?'ON — sending notes+clock':'OFF'));
+  }
 }
 
 // ============================================================
