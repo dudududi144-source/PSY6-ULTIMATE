@@ -88,6 +88,8 @@ body.perf-mode .knob{width:72px;height:72px}
         <button onclick="tapTempo()">&#128433; TAP (T)</button>
         <button onclick="toggleSectionLoop()" id="btnLoop">&#128257; LOOP (L)</button>
         <button onclick="undoSequencer()">&#8630; UNDO (U)</button>
+        <button onclick="triggerFill()">&#128165; FILL (F)</button>
+        <button onclick="cycleBassMode()" id="btnBassMode">&#127928; BASS: ROLLING</button>
         <button onclick="reseed()">&#8635; VARIATION (V)</button>
         <button onclick="cycleBrainMode()" id="btnBrainMode">&#129504; GENERATIVE</button>
         <button onclick="randomizeSound()">&#127922; SOUND</button>
@@ -207,6 +209,12 @@ let currentChordRoot = 0; // scale degree of current chord root
 const ARP_MODES = ['UP','DOWN','UP-DOWN','RANDOM','CHORD'];
 let currentArpMode = 'UP';
 let arpDirection = 1; // for UP-DOWN mode
+// Bass pattern modes
+const BASS_MODES = ['ROLLING','OFFBEAT','PUMPING','HALFTIME'];
+let currentBassMode = 'ROLLING';
+// Fill generator state
+let fillActive = false;
+let fillStepsRemaining = 0;
 
 // --- State ---
 let audioCtx=null, engine=null, isPlaying=false;
@@ -909,7 +917,15 @@ function scheduleStep(step,time){
         engine.triggerDrum(time,currentDrumPreset,ev.vel||0.8,0);
         updateGrammars('kick',step,0);
       }
-    } else if(t===1){ // BASS — anchors to chord root, rolling pattern
+      // Schedule fill percussion if fill is active
+      if(fillActive&&fillStepsRemaining>0){
+        scheduleFillStep(step,time);
+        fillStepsRemaining--;
+        if(fillStepsRemaining===0)fillActive=false;
+      }
+    } else if(t===1){ // BASS — mode-aware, anchors to chord root
+      // Check bass mode pattern
+      if(!shouldBassPlay(step))continue;
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
       const chordRoot=currentChordRoot||scale[0];
       let bassNote;
@@ -958,11 +974,33 @@ function scheduleStep(step,time){
 }
 
 function onSectionChange(){
-  musicalState.energy=SECTIONS[currentSection]==='DROP'?0.9:
-                      SECTIONS[currentSection]==='BREAK'?0.3:0.6;
+  // Energy automation per section
+  const energyMap={INTRO:0.4,BUILD:0.6,DROP:0.95,BREAK:0.25,RISER:0.7,DROP2:1.0,LOOP:0.8};
+  musicalState.energy=energyMap[SECTIONS[currentSection]]||0.6;
+  
+  // Auto-adjust FX based on energy
+  if(engine){
+    const e=musicalState.energy;
+    // Higher energy = more drive, less reverb
+    engine.setDrive(e*0.4);
+    engine.setReverbMix(0.3-e*0.15);
+    // BUILD/RISER: increase delay for tension
+    if(SECTIONS[currentSection]==='BUILD'||SECTIONS[currentSection]==='RISER'){
+      engine.setDelayMix(0.4);
+    } else {
+      engine.setDelayMix(knobValues.delay/100);
+    }
+  }
+  
+  // Trigger fill on section transitions (except INTRO)
+  if(currentSection>0&&!sectionLoopEnabled){
+    triggerFill();
+  }
+  
   updateLCD();
   updateSectionBtns();
-  toast('SECTION: '+SECTIONS[currentSection]);
+  updateBrainStatus();
+  toast('SECTION: '+SECTIONS[currentSection]+' (energy: '+musicalState.energy.toFixed(2)+')');
 }
 
 // ============================================================
@@ -1527,6 +1565,8 @@ document.addEventListener('keydown',e=>{
     case 't':case 'T':tapTempo();break;
     case 'l':case 'L':toggleSectionLoop();break;
     case 'u':case 'U':undoSequencer();break;
+    case 'f':case 'F':triggerFill();break;
+    case 'b':case 'B':cycleBassMode();break;
     case 'r':case 'R':recordLoop();break;
     case 's':case 'S':randomizeSound();break;
     case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':
@@ -2135,6 +2175,64 @@ function undoSequencer(){
   patterns=undoStack.pop();
   updateSeqUI();
   toast('UNDO ('+undoStack.length+' states left)');
+}
+
+// ============================================================
+// BASS PATTERN MODES — Different bass rhythms
+// ============================================================
+function shouldBassPlay(step){
+  switch(currentBassMode){
+    case 'ROLLING': // K-B-B-B classic psytrance
+      return step%4!==0;
+    case 'OFFBEAT': // Trance-style offbeat bass
+      return step%4===2;
+    case 'PUMPING': // Pumping 8th notes
+      return step%2===0&&step%4!==0;
+    case 'HALFTIME': // Half-time heavy bass
+      return step===0||step===8||(rand()<0.15);
+    default:
+      return step%4!==0;
+  }
+}
+
+function cycleBassMode(){
+  const idx=(BASS_MODES.indexOf(currentBassMode)+1)%BASS_MODES.length;
+  currentBassMode=BASS_MODES[idx];
+  const btn=document.getElementById('btnBassMode');
+  if(btn)btn.innerHTML='&#127928; BASS: '+currentBassMode;
+  toast('BASS MODE: '+currentBassMode);
+}
+
+// ============================================================
+// FILL GENERATOR — Percussion fills for section transitions
+// ============================================================
+function triggerFill(){
+  if(!audioCtx||!engine)return;
+  fillActive=true;
+  fillStepsRemaining=16; // 1 bar fill
+  toast('FILL! — 1 bar percussion fill');
+}
+
+function scheduleFillStep(step,time){
+  if(!fillActive)return;
+  const stepDur=60/currentBpm/4;
+  // Snare roll: increasing density
+  const density=step/16; // 0 to 1
+  const percPreset=LIB.drum.find(d=>d.type==='snare')||LIB.drum.find(d=>d.type==='hatC')||currentDrumPreset;
+  const hatPreset=LIB.drum.find(d=>d.type==='hatC')||currentDrumPreset;
+  
+  // Snare hits on every step in second half
+  if(step>=8||rand()<density*0.7){
+    engine.triggerDrum(time,percPreset,0.4+density*0.5,2);
+  }
+  // Hats on 16ths in last quarter
+  if(step>=12){
+    engine.triggerDrum(time,hatPreset,0.3+density*0.4,2);
+  }
+  // Kick on downbeats
+  if(step%4===0){
+    engine.triggerDrum(time,currentDrumPreset,0.8,0);
+  }
 }
 
 // ============================================================
