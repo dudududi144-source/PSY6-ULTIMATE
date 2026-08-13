@@ -113,6 +113,7 @@ Toggle with **📤 MIDI OUT** button:
 | 3.3 | Pattern Copy/Paste (I/O) + Preset Chain (P) + Step Repeat |
 | 3.4 | Pattern Swap (J) + MIDI Note Action Mapping (C0-G0) + Auto-Morph (M) |
 | 3.5 | Pattern Merge (;) + Preset History + Step Probability (shift+right-click) |
+| 3.6 | Pattern Invert (0) + Preset Clone (C) + Track FX Modes (N/D/W/P per track) |
 
 ## License
 
