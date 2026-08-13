@@ -117,6 +117,7 @@ Toggle with **📤 MIDI OUT** button:
 | 3.7 | Pattern Stretch/Compress (7/8) + Track Delay Offset + Preset Blend (9) |
 | 3.8 | BPM Ramp (5/6) + Mute Groups (DRUMS/SYNTHS) + Preset Evolve (4) |
 | 3.9 | Track Pan (per-track stereo) + Section Transition FX (riser/impact) + Preset Snapshot |
+| 4.0 | Section Repeat (Home) + Track Compressor (End) + Preset Random Walk (PageUp) |
 
 ## License
 
