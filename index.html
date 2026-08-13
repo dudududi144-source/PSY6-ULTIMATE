@@ -1502,7 +1502,13 @@ function buildPads(){
     const pad=document.createElement('div');
     pad.className='pad';
     pad.textContent=i+1;
-    pad.dataset.note=60+scale[i%scale.length]+(i>=scale.length?12:0);
+    if(scaleLockEnabled){
+      // Lock to current scale
+      pad.dataset.note=60+scale[i%scale.length]+(i>=scale.length?12:0);
+    } else {
+      // Chromatic
+      pad.dataset.note=60+i;
+    }
     pad.addEventListener('mousedown',()=>triggerPad(pad));
     pad.addEventListener('touchstart',e=>{triggerPad(pad);e.preventDefault()});
     grid.appendChild(pad);
@@ -1607,6 +1613,9 @@ function handleMIDI(msg){
     // LEARN: MIDI performance teaches the melodic grammar
     updateGrammars('lead',-1,midi);
     updateBrainStatus();
+  } else if(cmd===0xC0){ // Program Change
+    handleProgramChange(data1);
+    return;
   } else if(cmd===0xB0){ // CC
     // Map CC to knobs (auto-learn)
     const cc=data1,val=data2/127;
@@ -1722,6 +1731,8 @@ document.addEventListener('keydown',e=>{
     case 'n':case 'N':randomizeAllPresets();break;
     case '[':adjustSectionLength(-2);break;
     case ']':adjustSectionLength(2);break;
+    case 'e':case 'E':generateAllVariations();break;
+    case 'k':case 'K':toggleScaleLock();break;
     case '?':toggleHelp();break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
@@ -2707,6 +2718,78 @@ function adjustSectionLength(delta){
   SECTION_BARS[sectionName]=newVal;
   updateLCD();
   toast(sectionName+' LENGTH: '+newVal+' bars');
+}
+
+// ============================================================
+// PATTERN VARIATION GENERATOR — Mutate patterns musically
+// ============================================================
+function generateTrackVariation(trackIdx){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackName=trackNames[trackIdx];
+  if(!patterns[trackName])return;
+  pushUndo();
+  const arr=patterns[trackName];
+  const mutationRate=0.3; // 30% of steps get mutated
+  
+  for(let i=0;i<16;i++){
+    if(rand()<mutationRate){
+      // Mutate this step
+      const action=pick(['toggle','toggle','velocity']);
+      if(action==='toggle'){
+        arr[i].on=!arr[i].on;
+      } else if(action==='velocity'&&arr[i].on){
+        arr[i].vel=clamp((arr[i].vel||0.8)+(rand()-0.5)*0.4,0.2,1.0);
+      }
+    }
+  }
+  updateSeqUI();
+  toast('VARIATION: '+trackName.toUpperCase()+' mutated ('+Math.round(mutationRate*100)+'% rate)');
+}
+
+// Generate variations for all tracks at once
+function generateAllVariations(){
+  pushUndo();
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  trackNames.forEach((name,idx)=>{
+    if(!patterns[name])return;
+    const arr=patterns[name];
+    const rate=name==='kick'?0.15:0.3; // kick mutates less
+    for(let i=0;i<16;i++){
+      if(rand()<rate){
+        if(rand()<0.6){arr[i].on=!arr[i].on}
+        else if(arr[i].on){arr[i].vel=clamp((arr[i].vel||0.8)+(rand()-0.5)*0.4,0.2,1.0)}
+      }
+    }
+  });
+  currentVariation++;
+  updateSeqUI();
+  updateLCD();
+  toast('ALL VARIATIONS generated — VAR '+currentVariation);
+}
+
+// ============================================================
+// MIDI PROGRAM CHANGE — Switch presets via MIDI PC
+// ============================================================
+function handleProgramChange(program){
+  const cats=['bass','lead','arp','pad'];
+  const cat=cats[program%4]; // Cycle through categories
+  const options=LIB[cat].filter(p=>p.genre===currentGenre);
+  if(options.length===0)return;
+  const idx=Math.floor(program/4)%options.length;
+  currentPreset[cat]=options[idx];
+  buildPresetChips();
+  toast('PC '+program+': '+cat.toUpperCase()+' -> '+options[idx].name);
+}
+
+// ============================================================
+// SCALE LOCK — Lock pads to current scale
+// ============================================================
+let scaleLockEnabled=true; // default ON
+
+function toggleScaleLock(){
+  scaleLockEnabled=!scaleLockEnabled;
+  buildPads(); // Rebuild pads with new lock state
+  toast('SCALE LOCK: '+(scaleLockEnabled?'ON — pads follow scale':'OFF — pads chromatic'));
 }
 
 // ============================================================
