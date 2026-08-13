@@ -170,6 +170,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 4.5 | Song export deep copy, genre fallback, UI null checks (5 functions), BPM bounds (MIDI clock + ramp) |
 | 4.6 | safeParse wrapper, canvas fallback text, removed all console.log (security + a11y + quality) |
 | 4.7 | applyBestCandidate empty guard, notes array guarantee, sampleMelodicInterval null check |
+| 4.8 | Refactor: centralized TRACK_NAMES constants (23 replacements) + debounced resize handler |
 
 ## License
 
