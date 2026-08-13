@@ -180,6 +180,20 @@ const SCALES = {
   'Dorian':[0,2,3,5,7,9,10]
 };
 
+// Chord progressions (scale degrees, 0-indexed)
+const CHORD_PROGRESSIONS = {
+  'i-VI-III-VII': [0,5,2,6],    // Epic/Trance
+  'i-iv-v-i':     [0,3,4,0],    // Minor classic
+  'I-IV-V-I':     [0,3,4,0],    // Major classic
+  'i-VII-VI-V':   [0,6,5,4],    // Andalusian (Phrygian)
+  'i-III-VII-VI': [0,2,6,5],    // Melodic
+  'i-v-iv-v':     [0,4,3,4],    // Psytrance hypnotic
+  'I-V-vi-IV':    [0,4,5,3]     // Pop/Prog
+};
+let currentChordProgression = CHORD_PROGRESSIONS['i-VI-III-VII'];
+let currentChordIndex = 0;
+let currentChordRoot = 0; // scale degree of current chord root
+
 // --- State ---
 let audioCtx=null, engine=null, isPlaying=false;
 let currentBpm=145, currentSwing=0, currentSection=0, currentBar=0, currentStep=0;
@@ -809,6 +823,8 @@ function scheduler(){
     if(currentStep>=16){
       currentStep=0;
       currentBar++;
+      // Advance chord progression every bar
+      advanceChord();
       // Check section advancement
       const sectionBars=SECTION_BARS[SECTIONS[currentSection]]||8;
       if(currentBar>=sectionBars){
@@ -849,13 +865,19 @@ function scheduleStep(step,time){
         engine.triggerDrum(time,currentDrumPreset,ev.vel||0.8,0);
         updateGrammars('kick',step,0);
       }
-    } else if(t===1){ // BASS — rolling, follows root, updates state + learns grammar
+    } else if(t===1){ // BASS — anchors to chord root, rolling pattern
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+      const chordRoot=currentChordRoot||scale[0];
       let bassNote;
       if(brainMode==='ADAPTIVE' && grammarConfidence()>0.3){
-        bassNote=sampleBassFromGrammar(scale[0]);
+        bassNote=sampleBassFromGrammar(chordRoot);
       } else {
-        bassNote=musicalState.bassLastMidi+scale[(ev.note||0)%scale.length];
+        // Anchor bass to chord root (36 = C1 bass register)
+        bassNote=36+chordRoot;
+        // Add passing tones on off-beats
+        if(step%4!==0&&rand()<0.3){
+          bassNote+=pick([scale[1],scale[2],7]); // approach tones
+        }
       }
       engine.triggerSynth(time,bassNote,currentPreset.bass,stepDur*(currentPreset.bass.gate||0.4),1);
       musicalState.bassLastMidi=bassNote;
@@ -879,13 +901,12 @@ function scheduleStep(step,time){
       const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
       const arpNote=72+scale[(ev.note||0)%scale.length];
       engine.triggerSynth(time,arpNote,currentPreset.arp,stepDur*0.8,4);
-    } else if(t===5){ // PAD
-      const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
-      // Play chord (root + 3rd + 5th)
-      const root=48+scale[0];
-      engine.triggerSynth(time,root,currentPreset.pad,stepDur*8,5);
-      engine.triggerSynth(time,root+scale[2],currentPreset.pad,stepDur*8,5);
-      engine.triggerSynth(time,root+scale[4],currentPreset.pad,stepDur*8,5);
+    } else if(t===5){ // PAD — plays current chord from progression
+      const chordNotes=getCurrentChordNotes();
+      const baseOctave=48;
+      chordNotes.forEach(note=>{
+        engine.triggerSynth(time,baseOctave+note,currentPreset.pad,stepDur*8,5);
+      });
     }
   }
   // Update UI
@@ -1440,7 +1461,7 @@ document.addEventListener('keydown',e=>{
   switch(e.key){
     case ' ':e.preventDefault();togglePlay();break;
     case 'v':case 'V':reseed();break;
-    case 'w':case 'W':applyBestCandidate();toast('CHORD PROG generated');break;
+    case 'w':case 'W':generateChordProgression();break;
     case 'd':case 'D':patterns.kick=makePatterns(seed).kick;updateSeqUI();toast('DRUM pattern regenerated');break;
     case 'h':case 'H':applyBestCandidate();toast('MELODY generated');break;
     case 'z':case 'Z':patterns.arp=makePatterns(seed+1).arp;updateSeqUI();toast('ARP pattern regenerated');break;
@@ -1800,6 +1821,35 @@ function drawGrammarViz(){
   ctx.fillStyle='rgba(255,255,255,0.5)';
   ctx.font='8px monospace';
   ctx.fillText('melodic intervals (-12 to +12)',4,10);
+}
+
+// ============================================================
+// CHORD PROGRESSION ENGINE
+// ============================================================
+function generateChordProgression(){
+  const keys=Object.keys(CHORD_PROGRESSIONS);
+  const name=pick(keys);
+  currentChordProgression=CHORD_PROGRESSIONS[name];
+  currentChordIndex=0;
+  toast('CHORD PROG: '+name);
+  updateBrainStatus();
+}
+
+function advanceChord(){
+  currentChordIndex=(currentChordIndex+1)%currentChordProgression.length;
+  const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+  const degree=currentChordProgression[currentChordIndex];
+  currentChordRoot=scale[degree%scale.length];
+}
+
+function getCurrentChordNotes(){
+  const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+  const degree=currentChordProgression[currentChordIndex];
+  const root=scale[degree%scale.length];
+  // Build triad from scale degrees: root, +2, +4 (within scale)
+  const third=scale[(degree+2)%scale.length];
+  const fifth=scale[(degree+4)%scale.length];
+  return [root, third, fifth];
 }
 
 // ============================================================
