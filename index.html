@@ -215,12 +215,15 @@ let currentBassMode = 'ROLLING';
 // Fill generator state
 let fillActive = false;
 let fillStepsRemaining = 0;
+// Pad octave shift
+let padOctaveShift = 0;
 
 // --- State ---
 let audioCtx=null, engine=null, isPlaying=false;
 let currentBpm=145, currentSwing=0, currentSection=0, currentBar=0, currentStep=0;
 let currentVariation=0, schedulerInterval=null, nextStepTime=0;
 let seed=Date.now(), patterns={}, trackMutes=[false,false,false,false,false,false];
+let sectionPatterns={}; // Store different patterns per section
 let trackSolos=[false,false,false,false,false,false];
 let brainMode='GENERATIVE';
 let musicalState={leadLastMidi:60,bassLastMidi:36,contourMomentum:0,energy:0.5,rootPc:0};
@@ -974,6 +977,14 @@ function scheduleStep(step,time){
 }
 
 function onSectionChange(){
+  // Auto-save current section's pattern before switching
+  autoSaveSectionPattern();
+  // Load the new section's pattern if it exists
+  const newSectionName=SECTIONS[currentSection];
+  if(sectionPatterns[newSectionName]){
+    patterns=JSON.parse(JSON.stringify(sectionPatterns[newSectionName]));
+    updateSeqUI();
+  }
   // Energy automation per section
   const energyMap={INTRO:0.4,BUILD:0.6,DROP:0.95,BREAK:0.25,RISER:0.7,DROP2:1.0,LOOP:0.8};
   musicalState.energy=energyMap[SECTIONS[currentSection]]||0.6;
@@ -1189,6 +1200,27 @@ function updateSeqUI(){
         patterns[patternKeys[t]][s].on=!patterns[patternKeys[t]][s].on;
         step.classList.toggle('active');
       };
+      // Right-click: cycle velocity (0.3 -> 0.6 -> 1.0 -> 0.3)
+      step.oncontextmenu=(e)=>{
+        e.preventDefault();
+        if(!patterns[patternKeys[t]])return;
+        pushUndo();
+        const ev=patterns[patternKeys[t]][s];
+        const velLevels=[0.3,0.6,1.0];
+        const currentVel=ev.vel||0.8;
+        // Find next velocity level
+        let nextIdx=0;
+        for(let i=0;i<velLevels.length;i++){
+          if(currentVel<velLevels[i]-0.05){nextIdx=i;break}
+          nextIdx=(i+1)%velLevels.length;
+        }
+        ev.vel=velLevels[nextIdx];
+        ev.on=true;
+        step.classList.add('active');
+        // Visual feedback: opacity based on velocity
+        step.style.opacity=0.4+ev.vel*0.6;
+        toast('VELOCITY: '+Math.round(ev.vel*100)+'%');
+      };
       steps.appendChild(step);
     }
     row.appendChild(steps);
@@ -1379,7 +1411,7 @@ function buildPads(){
 function triggerPad(pad){
   if(!audioCtx)initAudio();
   if(audioCtx.state==='suspended')audioCtx.resume();
-  const midi=parseInt(pad.dataset.note);
+  const midi=parseInt(pad.dataset.note)+padOctaveShift*12;
   const preset=currentPreset.lead||LIB.lead[0];
   engine.triggerSynth(audioCtx.currentTime+0.01,midi,preset,0.3,3);
   pad.classList.add('triggered');
@@ -1567,6 +1599,8 @@ document.addEventListener('keydown',e=>{
     case 'u':case 'U':undoSequencer();break;
     case 'f':case 'F':triggerFill();break;
     case 'b':case 'B':cycleBassMode();break;
+    case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
+    case '-':case '_':padOctaveShift=Math.max(padOctaveShift-1,-3);toast('PAD OCTAVE: '+padOctaveShift);break;
     case 'r':case 'R':recordLoop();break;
     case 's':case 'S':randomizeSound();break;
     case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':
@@ -2232,6 +2266,32 @@ function scheduleFillStep(step,time){
   // Kick on downbeats
   if(step%4===0){
     engine.triggerDrum(time,currentDrumPreset,0.8,0);
+  }
+}
+
+// ============================================================
+// SECTION PATTERNS — Different patterns per section
+// ============================================================
+function saveSectionPattern(){
+  const sectionName=SECTIONS[currentSection];
+  sectionPatterns[sectionName]=JSON.parse(JSON.stringify(patterns));
+  toast('PATTERN SAVED to '+sectionName);
+}
+
+function loadSectionPattern(sectionIdx){
+  const sectionName=SECTIONS[sectionIdx];
+  if(sectionPatterns[sectionName]){
+    patterns=JSON.parse(JSON.stringify(sectionPatterns[sectionName]));
+    updateSeqUI();
+    toast('PATTERN LOADED from '+sectionName);
+  }
+}
+
+// Auto-save pattern when leaving a section
+function autoSaveSectionPattern(){
+  const sectionName=SECTIONS[currentSection];
+  if(!sectionPatterns[sectionName]){
+    sectionPatterns[sectionName]=JSON.parse(JSON.stringify(patterns));
   }
 }
 
