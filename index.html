@@ -135,8 +135,12 @@ body.perf-mode .knob{width:72px;height:72px}
       <div class="panel-title">SOUND SELECT</div>
       <div class="style-chips" id="presetChips"></div>
       <div style="margin-top:8px;display:flex;gap:6px">
-        <button class="chip" onclick="exportPresets()">&#8681; EXPORT</button>
-        <button class="chip" onclick="importPresets()">&#8679; IMPORT</button>
+        <button class="chip" onclick="exportPresets()">&#8681; PRESETS</button>
+        <button class="chip" onclick="importPresets()">&#8679; PRESETS</button>
+      </div>
+      <div style="margin-top:6px;display:flex;gap:6px">
+        <button class="chip" onclick="exportSong()">&#8681; SONG</button>
+        <button class="chip" onclick="importSong()">&#8679; SONG</button>
       </div>
     </div>
     <div class="panel">
@@ -738,11 +742,21 @@ class PooledEngine{
     this.noiseBuffer=ctx.createBuffer(1,bufLen,ctx.sampleRate);
     const data=this.noiseBuffer.getChannelData(0);
     for(let i=0;i<bufLen;i++)data[i]=Math.random()*2-1;
-    // Track buses
+    // Track buses + per-track FX sends
     this.trackBuses=[];
+    this.trackDelaySends=[];
+    this.trackReverbSends=[];
     for(let i=0;i<6;i++){
       const g=ctx.createGain();g.gain.value=0.8;g.connect(this.master);
       this.trackBuses.push(g);
+      // Delay send (default: KICK 0, BASS 0.1, others 0.3)
+      const ds=ctx.createGain();ds.gain.value=(i===0)?0:(i===1)?0.1:0.3;
+      g.connect(ds);ds.connect(this.delay);
+      this.trackDelaySends.push(ds);
+      // Reverb send (default: KICK 0, BASS 0.05, PAD 0.5, others 0.2)
+      const rs=ctx.createGain();rs.gain.value=(i===0)?0:(i===1)?0.05:(i===5)?0.5:0.2;
+      g.connect(rs);rs.connect(this.reverb);
+      this.trackReverbSends.push(rs);
     }
     // Voice pools
     this.synthPool=[];this.drumPool=[];
@@ -808,6 +822,8 @@ class PooledEngine{
   setDrive(amount){this.drive.curve=this.makeDriveCurve(amount)}
   setFilterFreq(hz){try{this.masterFilter.frequency.setTargetAtTime(clamp(hz,40,18000),this.ctx.currentTime,0.02)}catch(e){}}
   setFilterQ(q){try{this.masterFilter.Q.setTargetAtTime(clamp(q,0.1,30),this.ctx.currentTime,0.02)}catch(e){}}
+  setTrackDelaySend(idx,v){if(this.trackDelaySends[idx])this.trackDelaySends[idx].gain.value=clamp(v,0,1)}
+  setTrackReverbSend(idx,v){if(this.trackReverbSends[idx])this.trackReverbSends[idx].gain.value=clamp(v,0,1)}
   killAll(){
     for(const v of this.synthPool)v.panic();
     for(const v of this.drumPool)v.panic();
@@ -1954,6 +1970,94 @@ function toggleMIDIOut(){
   } else {
     toast('MIDI OUT: '+(midiOutEnabled?'ON — sending notes+clock':'OFF'));
   }
+}
+
+// ============================================================
+// SONG EXPORT / IMPORT — Full song as JSON
+// ============================================================
+function exportSong(){
+  try{
+    const song={
+      version:'2.3',
+      title:'PSY6 Song',
+      exportedAt:Date.now(),
+      bpm:currentBpm,
+      swing:currentSwing,
+      genre:currentGenre,
+      scale:currentScale,
+      seed:seed,
+      variation:currentVariation,
+      chordProgression:currentChordProgression,
+      arpMode:currentArpMode,
+      patterns:patterns,
+      presets:{
+        bass:currentPreset.bass?currentPreset.bass.id:null,
+        lead:currentPreset.lead?currentPreset.lead.id:null,
+        arp:currentPreset.arp?currentPreset.arp.id:null,
+        pad:currentPreset.pad?currentPreset.pad.id:null,
+        drum:currentDrumPreset?currentDrumPreset.id:null
+      },
+      knobValues:knobValues
+    };
+    const blob=new Blob([JSON.stringify(song,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='psy6-song-'+Date.now()+'.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('SONG EXPORTED');
+  }catch(e){toast('EXPORT FAILED: '+e.message)}
+}
+
+function importSong(){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='.json';
+  input.onchange=e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const song=JSON.parse(ev.target.result);
+        if(!song.patterns){toast('INVALID SONG FILE');return}
+        // Apply song data
+        currentBpm=song.bpm||145;
+        currentSwing=song.swing||0;
+        currentGenre=song.genre||'PSYTRANCE';
+        currentScale=song.scale||'Phrygian Dominant';
+        seed=song.seed||Date.now();
+        currentVariation=song.variation||0;
+        if(song.chordProgression)currentChordProgression=song.chordProgression;
+        if(song.arpMode)currentArpMode=song.arpMode;
+        patterns=song.patterns;
+        if(song.knobValues){
+          Object.keys(song.knobValues).forEach(k=>{
+            if(knobValues.hasOwnProperty(k))knobValues[k]=song.knobValues[k];
+          });
+        }
+        // Restore presets by ID
+        if(song.presets){
+          ['bass','lead','arp','pad'].forEach(cat=>{
+            if(song.presets[cat]){
+              const found=LIB[cat].find(p=>p.id===song.presets[cat]);
+              if(found)currentPreset[cat]=found;
+            }
+          });
+          if(song.presets.drum){
+            const found=LIB.drum.find(p=>p.id===song.presets.drum);
+            if(found)currentDrumPreset=found;
+          }
+        }
+        updateSeqUI();updateLCD();buildGenreChips();buildPresetChips();
+        KNOBS.forEach(k=>updateKnob(k));
+        toast('SONG IMPORTED: '+(song.title||'Untitled'));
+      }catch(err){toast('IMPORT FAILED: '+err.message)}
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ============================================================
