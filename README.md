@@ -111,6 +111,7 @@ Toggle with **📤 MIDI OUT** button:
 | 3.1 | Pattern Rotate (double-click M) + Randomize All Presets + Section Length Control |
 | 3.2 | Pattern Variation Generator (E) + MIDI Program Change + Scale Lock (K) |
 | 3.3 | Pattern Copy/Paste (I/O) + Preset Chain (P) + Step Repeat |
+| 3.4 | Pattern Swap (J) + MIDI Note Action Mapping (C0-G0) + Auto-Morph (M) |
 
 ## License
 
