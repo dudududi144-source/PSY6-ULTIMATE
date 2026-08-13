@@ -723,6 +723,9 @@ class SynthVoice{
     const freq=midiToFreq(midi);
     const t=when;
     try{
+      // Cancel any previous envelope to prevent overlap
+      this.vca.gain.cancelScheduledValues(t);
+      this.vca.gain.setValueAtTime(0,t);
       this.osc1.type=preset.wave1||'sawtooth';
       this.osc2.type=preset.wave2||'sawtooth';
       this.osc1.frequency.setValueAtTime(freq,t);
@@ -779,6 +782,11 @@ class DrumVoice{
     const decay=preset.decay||0.5;
     const tune=preset.tune||1;
     try{
+      // Cancel any previous envelope to prevent overlap
+      this.oscGain.gain.cancelScheduledValues(t);
+      this.oscGain.gain.setValueAtTime(0,t);
+      this.noiseGain.gain.cancelScheduledValues(t);
+      this.noiseGain.gain.setValueAtTime(0,t);
       if(preset.type==='kick'){
         // Kick: sine pitch drop + punch
         const startFreq=150*tune;
@@ -1671,17 +1679,33 @@ function initMIDI(){
     return;
   }
   navigator.requestMIDIAccess().then(access=>{
-    for(const input of access.inputs.values()){
-      input.onmidimessage=handleMIDI;
-      console.log('MIDI input connected:',input.name);
-      toast('MIDI IN: '+input.name);
+    function connectInputs(){
+      for(const input of access.inputs.values()){
+        input.onmidimessage=handleMIDI;
+        console.log('MIDI input connected:',input.name);
+      }
     }
-    // Capture first output port for MIDI Out
-    for(const output of access.outputs.values()){
-      midiOutput=output;
-      console.log('MIDI output connected:',output.name);
-      break; // use first available output
+    function connectOutputs(){
+      for(const output of access.outputs.values()){
+        midiOutput=output;
+        console.log('MIDI output connected:',output.name);
+        break; // use first available output
+      }
     }
+    connectInputs();
+    connectOutputs();
+    // Handle hot-plug MIDI devices
+    access.onstatechange=function(e){
+      console.log('MIDI state change:',e.port.name,e.port.state);
+      connectInputs();
+      connectOutputs();
+      if(e.port.type==='input'&&e.port.state==='connected'){
+        toast('MIDI IN: '+e.port.name);
+      }
+    };
+    // Show first connected input
+    const firstInput=access.inputs.values().next().value;
+    if(firstInput)toast('MIDI IN: '+firstInput.name);
   }).catch(e=>console.log('MIDI access denied'));
 }
 
