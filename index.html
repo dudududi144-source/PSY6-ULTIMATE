@@ -1198,6 +1198,21 @@ function updateSeqUI(){
     solo.onclick=()=>{trackSolos[t]=!trackSolos[t];solo.classList.toggle('muted');updateSeqUI()};
     row.appendChild(solo);
     
+    // Volume indicator (click to cycle volume)
+    const vol=document.createElement('div');
+    vol.className='seq-mute';
+    vol.style.borderColor='var(--accent)';
+    vol.textContent=Math.round(trackVolumes[t]*100)/10;
+    vol.title='Click: cycle volume';
+    vol.onclick=()=>{
+      const levels=[0.3,0.5,0.8,1.0];
+      const cur=trackVolumes[t];
+      let nextIdx=(levels.findIndex(l=>l>=cur-0.05)+1)%levels.length;
+      setTrackVolume(t,levels[nextIdx]);
+      vol.textContent=Math.round(trackVolumes[t]*100)/10;
+    };
+    row.appendChild(vol);
+    
     const label=document.createElement('div');
     label.className='seq-label';
     label.textContent=trackNames[t];
@@ -1401,8 +1416,10 @@ function buildPresetChips(){
     LIB[cat].filter(p=>p.genre===currentGenre).forEach(p=>{
       const chip=document.createElement('div');
       chip.className='chip'+(currentPreset[cat]&&currentPreset[cat].id===p.id?' active':'');
-      chip.textContent=p.name;
+      const star=presetFavorites.has(p.id)?'★ ':'';
+      chip.textContent=star+p.name;
       chip.onclick=()=>{currentPreset[cat]=p;buildPresetChips();toast(cat.toUpperCase()+': '+p.name)};
+      chip.oncontextmenu=(e)=>{e.preventDefault();toggleFavorite(p.id)};
       container.appendChild(chip);
     });
   });
@@ -1629,6 +1646,8 @@ document.addEventListener('keydown',e=>{
     case 'u':case 'U':undoSequencer();break;
     case 'f':case 'F':triggerFill();break;
     case 'g':case 'G':cycleHumanize();break;
+    case ',':case '<':nudgeAll(-1);break;
+    case '.':case '>':nudgeAll(1);break;
     case 'b':case 'B':cycleBassMode();break;
     case '+':case '=':padOctaveShift=Math.min(padOctaveShift+1,3);toast('PAD OCTAVE: +'+padOctaveShift);break;
     case '-':case '_':padOctaveShift=Math.max(padOctaveShift-1,-3);toast('PAD OCTAVE: '+padOctaveShift);break;
@@ -2417,6 +2436,75 @@ function morphPresets(cat){
     engine.triggerSynth(audioCtx.currentTime+0.05,note,morphed,0.4,cat==='bass'?1:3);
   }
   toast('MORPHED: '+a.name+' + '+b.name);
+}
+
+// ============================================================
+// PATTERN NUDGE — Shift pattern left/right
+// ============================================================
+function nudgeTrack(trackIdx,direction){
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  const trackName=trackNames[trackIdx];
+  if(!patterns[trackName])return;
+  pushUndo();
+  const arr=patterns[trackName];
+  if(direction>0){
+    // Shift right: last element goes to front
+    arr.unshift(arr.pop());
+  } else {
+    // Shift left: first element goes to end
+    arr.push(arr.shift());
+  }
+  updateSeqUI();
+  toast(trackName.toUpperCase()+' nudged '+(direction>0?'RIGHT':'LEFT'));
+}
+
+// Nudge all tracks at once
+function nudgeAll(direction){
+  pushUndo();
+  const trackNames=['kick','bass','perc','lead','arp','pad'];
+  trackNames.forEach(name=>{
+    if(!patterns[name])return;
+    const arr=patterns[name];
+    if(direction>0){arr.unshift(arr.pop())}
+    else{arr.push(arr.shift())}
+  });
+  updateSeqUI();
+  toast('ALL TRACKS nudged '+(direction>0?'RIGHT':'LEFT'));
+}
+
+// ============================================================
+// TRACK VOLUME — Per-track gain control
+// ============================================================
+let trackVolumes=[0.8,0.8,0.8,0.8,0.8,0.8];
+
+function setTrackVolume(idx,v){
+  trackVolumes[idx]=clamp(v,0,1);
+  if(engine&&engine.trackBuses[idx]){
+    engine.setTrackGain(idx,trackVolumes[idx]);
+  }
+}
+
+function adjustTrackVolume(idx,delta){
+  setTrackVolume(idx,trackVolumes[idx]+delta);
+  toast(TRACK_NAMES_SHORT[idx]+' VOL: '+Math.round(trackVolumes[idx]*100)+'%');
+}
+
+const TRACK_NAMES_SHORT=['KICK','BASS','PERC','LEAD','ARP','PAD'];
+
+// ============================================================
+// PRESET FAVORITES — Mark presets as favorites
+// ============================================================
+let presetFavorites=new Set();
+
+function toggleFavorite(presetId){
+  if(presetFavorites.has(presetId)){
+    presetFavorites.delete(presetId);
+    toast('Removed from favorites');
+  } else {
+    presetFavorites.add(presetId);
+    toast('Added to favorites');
+  }
+  buildPresetChips();
 }
 
 // ============================================================
