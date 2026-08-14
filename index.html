@@ -92,8 +92,8 @@ body.perf-mode .knob{width:72px;height:72px}
         <div class="bar-info" id="lcdInfo">BAR 1/8 | BPM 145 | VAR 0</div>
       </div>
       <div class="transport">
-        <button id="btnPlay" onclick="togglePlay()">&#9654; PLAY</button>
-        <button onclick="stopEngine()">&#9632; STOP</button>
+        <button id="btnPlay" onclick="togglePlay()" aria-label="Play or stop the music">&#9654; PLAY</button>
+        <button onclick="stopEngine()" aria-label="Stop the music">&#9632; STOP</button>
         <button onclick="tapTempo()">&#128433; TAP (T)</button>
         <button onclick="toggleSectionLoop()" id="btnLoop">&#128257; LOOP (L)</button>
         <button onclick="undoSequencer()">&#8630; UNDO (U)</button>
@@ -111,7 +111,7 @@ body.perf-mode .knob{width:72px;height:72px}
         <button id="btnLiveRec" onclick="toggleLiveRecording()">&#128308; LIVE REC</button>
         <button onclick="saveProject(prompt('Project name:','my-groove')||'default')">&#128190; SAVE</button>
         <button onclick="loadProject()">&#128194; LOAD</button>
-        <button onclick="toggleHelp()">&#10067; HELP</button>
+        <button onclick="toggleHelp()" aria-label="Show keyboard shortcuts help">&#10067; HELP</button>
         <button onclick="toggleMuteGroup('DRUMS')">&#129345; DRUMS</button>
         <button onclick="toggleMuteGroup('SYNTHS')">&#127929; SYNTHS</button>
       </div>
@@ -120,7 +120,7 @@ body.perf-mode .knob{width:72px;height:72px}
 
     <div class="panel">
       <div class="panel-title">XY PAD — Cutoff / Resonance</div>
-      <div class="xy-pad" id="xyPad">
+      <div class="xy-pad" id="xyPad" role="slider" aria-label="Filter cutoff and resonance control" tabindex="0">
         <div class="crosshair-x" id="crossX" style="left:50%"></div>
         <div class="crosshair-y" id="crossY" style="top:50%"></div>
       </div>
@@ -128,7 +128,7 @@ body.perf-mode .knob{width:72px;height:72px}
 
     <div class="panel">
       <div class="panel-title">STEP SEQUENCER — 16 Steps</div>
-      <div class="seq-grid" id="seqGrid"></div>
+      <div class="seq-grid" id="seqGrid" role="grid" aria-label="Step sequencer"></div>
     </div>
 
     <div class="panel">
@@ -175,7 +175,7 @@ body.perf-mode .knob{width:72px;height:72px}
     </div>
     <div class="panel">
       <div class="panel-title">PERFORMANCE PADS</div>
-      <div class="pads-grid" id="padsGrid"></div>
+      <div class="pads-grid" id="padsGrid" role="group" aria-label="Performance pads"></div>
     </div>
     <div class="panel">
       <div class="panel-title">BRAIN — Candidate Generator</div>
@@ -198,7 +198,7 @@ body.perf-mode .knob{width:72px;height:72px}
 <div class="toast" id="toast"></div>
 
 <!-- Help Panel -->
-<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()">
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()" role="dialog" aria-label="Keyboard shortcuts help">
   <div class="help-panel" onclick="event.stopPropagation()">
     <span class="help-close" onclick="toggleHelp()">&#10005;</span>
     <h2>PSY6 ULTIMATE v4.0 — Keyboard Shortcuts (46 total)</h2>
@@ -1898,7 +1898,7 @@ document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
   if(document.activeElement&&document.activeElement.tagName==='INPUT')return;
   switch(e.key){
-    case ' ':e.preventDefault();togglePlay();break;
+    case ' ':e.preventDefault();if(e.shiftKey){toggleGlobalMute()}else{togglePlay()};break;
     case 'v':case 'V':reseed();break;
     case 'w':case 'W':generateChordProgression();break;
     case 'd':case 'D':patterns.kick=makePatterns(seed).kick;updateSeqUI();toast('DRUM pattern regenerated');break;
@@ -3742,6 +3742,24 @@ function checkRandomWalk(){
       buildPresetChips();
     }
   }
+}
+
+// ============================================================
+// GLOBAL MUTE — Master mute toggle
+// ============================================================
+let globalMuted=false;
+
+function toggleGlobalMute(){
+  globalMuted=!globalMuted;
+  if(engine){
+    engine.setMasterGain(globalMuted?0:knobValues.volume/100);
+  }
+  const btn=document.getElementById('btnGlobalMute');
+  if(btn){
+    btn.innerHTML=globalMuted?'&#128263; MUTED':'&#128266; MUTE';
+    btn.classList.toggle('active',globalMuted);
+  }
+  toast(globalMuted?'GLOBAL MUTE: ON':'GLOBAL MUTE: OFF');
 }
 
 // ============================================================
