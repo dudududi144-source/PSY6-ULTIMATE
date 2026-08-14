@@ -119,6 +119,7 @@ body.perf-mode .knob{width:72px;height:72px}
         <button onclick="exportWAVHighQuality()" aria-label="Export high quality WAV">&#127911; HQ WAV</button>
         <button id="btnMetronome" onclick="toggleMetronome()" aria-label="Toggle metronome">&#128338; METRO</button>
         <button onclick="exportMIDI()" aria-label="Export patterns as MIDI file">&#127932; MIDI</button>
+        <button onclick="toggleMorphChain()" aria-label="Toggle preset morphing chain">&#128279; MORPH CHAIN</button>
         <button onclick="toggleHelp()" aria-label="Show keyboard shortcuts help">&#10067; HELP</button>
         <button onclick="toggleMuteGroup('DRUMS')">&#129345; DRUMS</button>
         <button onclick="toggleMuteGroup('SYNTHS')">&#127929; SYNTHS</button>
@@ -1052,6 +1053,8 @@ function scheduler(){
       updateBPMRamp();
       // Check random walk
       checkRandomWalk();
+      // Check morph chain
+      checkMorphChain();
       // Check section advancement
       const sectionBars=SECTION_BARS[SECTIONS[currentSection]]||8;
       if(currentBar>=sectionBars){
@@ -1454,7 +1457,12 @@ function updateSeqUI(){
     steps.className='seq-steps';
     for(let s=0;s<16;s++){
       const step=document.createElement('div');
-      step.className='seq-step'+(patterns[patternKeys[t]]&&patterns[patternKeys[t]][s]&&patterns[patternKeys[t]][s].on?' active':'');
+      const ev=patterns[patternKeys[t]]&&patterns[patternKeys[t]][s];
+      step.className='seq-step'+(ev&&ev.on?' active':'');
+      // Probability visualization: opacity based on prob
+      if(ev&&ev.on&&ev.prob!==undefined&&ev.prob<1.0){
+        step.style.opacity=0.4+ev.prob*0.6;
+      }
       step.dataset.step=s;
       step.dataset.track=t;
       step.onclick=()=>{
@@ -4094,6 +4102,34 @@ function buildMIDIFile(events, ticksPerBeat){
   bytes.push(...trackBytes);
   
   return new Uint8Array(bytes);
+}
+
+// ============================================================
+// PRESET MORPHING CHAIN — Auto-morph presets in sequence
+// ============================================================
+let morphChainEnabled = false;
+let morphChainCounter = 0;
+let morphChainIndex = 0;
+
+function toggleMorphChain(){
+  morphChainEnabled = !morphChainEnabled;
+  morphChainCounter = 0;
+  morphChainIndex = 0;
+  toast('MORPH CHAIN: ' + (morphChainEnabled ? 'ON — morphing every 4 bars' : 'OFF'));
+}
+
+function checkMorphChain(){
+  if(!morphChainEnabled)return;
+  morphChainCounter++;
+  if(morphChainCounter >= 4){
+    morphChainCounter = 0;
+    // Cycle through categories
+    const cats = ['bass', 'lead', 'arp', 'pad'];
+    const cat = cats[morphChainIndex % 4];
+    morphChainIndex++;
+    // Morph the current preset
+    morphPresets(cat);
+  }
 }
 
 // ============================================================
