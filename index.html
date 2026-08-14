@@ -118,6 +118,7 @@ body.perf-mode .knob{width:72px;height:72px}
         <button onclick="switchPatternBank('D')" aria-label="Switch to pattern bank D">BANK D</button>
         <button onclick="exportWAVHighQuality()" aria-label="Export high quality WAV">&#127911; HQ WAV</button>
         <button id="btnMetronome" onclick="toggleMetronome()" aria-label="Toggle metronome">&#128338; METRO</button>
+        <button onclick="exportMIDI()" aria-label="Export patterns as MIDI file">&#127932; MIDI</button>
         <button onclick="toggleHelp()" aria-label="Show keyboard shortcuts help">&#10067; HELP</button>
         <button onclick="toggleMuteGroup('DRUMS')">&#129345; DRUMS</button>
         <button onclick="toggleMuteGroup('SYNTHS')">&#127929; SYNTHS</button>
@@ -3961,6 +3962,138 @@ function clearPatternBank(bank){
   } else {
     toast('PATTERN BANK '+bank+' CLEARED');
   }
+}
+
+// ============================================================
+// MIDI FILE EXPORT — Export patterns as Standard MIDI File
+// ============================================================
+function exportMIDI(){
+  if(!audioCtx)initAudio();
+  const barsToExport = 4;
+  const stepDur = 60/currentBpm/4; // seconds per step
+  const ticksPerBeat = 480;
+  const ticksPerStep = ticksPerBeat/4; // 16th note
+  
+  // Build MIDI events
+  const events = [];
+  const trackNames = TRACK_NAMES_KEYS;
+  
+  for(let bar=0; bar<barsToExport; bar++){
+    for(let step=0; step<16; step++){
+      const tick = (bar*16+step)*ticksPerStep;
+      for(let tr=0; tr<6; tr++){
+        const pat = patterns[trackNames[tr]];
+        if(!pat || !pat[step] || !pat[step].on)continue;
+        const ev = pat[step];
+        const vel = Math.round((ev.vel||0.8)*127);
+        
+        if(tr===0){ // KICK
+          events.push({tick, note:36, vel, dur:ticksPerStep*2, ch:9});
+        } else if(tr===1){ // BASS
+          const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+          const bn = 36+(currentChordRoot||scale[0]);
+          events.push({tick, note:bn, vel, dur:ticksPerStep*3, ch:0});
+        } else if(tr===2){ // PERC
+          events.push({tick, note:42, vel, dur:ticksPerStep, ch:9}); // closed hat
+        } else if(tr===3){ // LEAD
+          const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];
+          const ln = 60+scale[(ev.note||0)%scale.length];
+          events.push({tick, note:ln, vel, dur:ticksPerStep*6, ch:1});
+        } else if(tr===4){ // ARP
+          const arpNote = 60+getArpNote(step);
+          events.push({tick, note:arpNote, vel, dur:ticksPerStep*3, ch:2});
+        } else if(tr===5){ // PAD
+          const chordNotes = getCurrentChordNotes();
+          chordNotes.forEach(function(note){
+            events.push({tick, note:48+note, vel:Math.round(vel*0.6), dur:ticksPerStep*16, ch:3});
+          });
+        }
+      }
+    }
+  }
+  
+  // Sort events by tick
+  events.sort(function(a,b){return a.tick-b.tick});
+  
+  // Build MIDI file
+  const midiBytes = buildMIDIFile(events, ticksPerBeat);
+  
+  // Download
+  const blob = new Blob([midiBytes], {type:'audio/midi'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'psy6-ultimate-'+Date.now()+'.mid';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('MIDI EXPORTED — '+events.length+' events');
+}
+
+function buildMIDIFile(events, ticksPerBeat){
+  const bytes = [];
+  
+  // Helper: write variable-length quantity
+  function writeVarLen(value){
+    const buffer = [];
+    buffer.push(value & 0x7F);
+    while(value >>= 7){
+      buffer.push((value & 0x7F) | 0x80);
+    }
+    buffer.reverse();
+    return buffer;
+  }
+  
+  // Helper: write 16-bit big-endian
+  function write16(value){
+    return [(value >> 8) & 0xFF, value & 0xFF];
+  }
+  
+  // Helper: write 32-bit big-endian
+  function write32(value){
+    return [(value >> 24) & 0xFF, (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF];
+  }
+  
+  // MThd header
+  bytes.push(0x4D, 0x54, 0x68, 0x64); // "MThd"
+  bytes.push(...write32(6)); // header length
+  bytes.push(...write16(0)); // format 0
+  bytes.push(...write16(1)); // 1 track
+  bytes.push(...write16(ticksPerBeat)); // ticks per beat
+  
+  // MTrk track
+  const trackBytes = [];
+  let lastTick = 0;
+  
+  // Tempo meta event (120 BPM default)
+  trackBytes.push(0x00); // delta time
+  trackBytes.push(0xFF, 0x51, 0x03); // tempo meta
+  const tempo = Math.round(60000000/currentBpm);
+  trackBytes.push((tempo >> 16) & 0xFF, (tempo >> 8) & 0xFF, tempo & 0xFF);
+  
+  // Note events
+  events.forEach(function(ev){
+    const delta = ev.tick - lastTick;
+    lastTick = ev.tick;
+    
+    // Note On
+    trackBytes.push(...writeVarLen(delta));
+    trackBytes.push(0x90 | (ev.ch||0), ev.note & 0x7F, ev.vel & 0x7F);
+    
+    // Note Off
+    trackBytes.push(...writeVarLen(ev.dur));
+    trackBytes.push(0x80 | (ev.ch||0), ev.note & 0x7F, 0);
+  });
+  
+  // End of track
+  trackBytes.push(0x00); // delta time
+  trackBytes.push(0xFF, 0x2F, 0x00); // end of track
+  
+  // Write MTrk header
+  bytes.push(0x4D, 0x54, 0x72, 0x6B); // "MTrk"
+  bytes.push(...write32(trackBytes.length));
+  bytes.push(...trackBytes);
+  
+  return new Uint8Array(bytes);
 }
 
 // ============================================================
