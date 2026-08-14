@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v5.5)
+# PSY6 ULTIMATE — Full Architecture Specification (v5.6)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -21,7 +21,7 @@ The instrument is organized in 8 layers, top to bottom:
 
 | Layer | Components |
 |-------|-----------|
-| **UI Layer** | Knobs, XY Pad, Seq (M/S/Vol/FX/Pan), Arranger, Pads, Visualizers, Help, **Track Colors** |
+| **UI Layer** | Knobs, XY Pad, Seq (M/S/Vol/FX/Pan), Arranger, Pads, Visualizers, Help, **Track Colors**, **Probability Viz** |
 | **Brain Layer** | CandidateGen, Grammars, ADAPTIVE |
 | **Composition** | Chord Progressions, Arpeggiator, Bass Modes, Pattern Operations |
 | **Scheduler** | Swing, Humanize, Step Repeat/Prob, Track Delay Offset, Section Arranger |
@@ -259,6 +259,12 @@ FX components:
 - Channels: KICK/PERC=9, BASS=0, LEAD=1, ARP=2, PAD=3
 - Delta-time encoded Note On/Off events
 
+### Step Probability Visualization (v5.6)
+- Steps with probability < 1.0 shown with reduced opacity
+- opacity = 0.4 + prob * 0.6
+- Visual distinction for humanized patterns
+- Helps identify ghost notes and probabilistic steps
+
 ## 10. Preset System
 
 ### Genres & Categories
@@ -274,6 +280,7 @@ FX components:
 - Evolve: Mutate every 4 bars
 - Random Walk: Adjacent preset every 2 bars
 - Chain: Cycle presets per bar
+- **Morphing Chain (v5.6): Auto-morph through categories every 4 bars**
 
 ## 11. Performance Budget
 
@@ -330,12 +337,12 @@ No build step. No dependencies. No server required.
 - v2.x: Musicianship (chords, arp, MIDI, patterns, macros)
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
-- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)**
+- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)** + **Probability Viz + Morphing Chain**
 
 ---
 
-Architecture version: 5.5
+Architecture version: 5.6
 Status: IMPLEMENTED
-Total code: 154.3 KB (single file)
+Total code: 155.6 KB (single file)
 Total shortcuts: 53
 Total features: 100+
