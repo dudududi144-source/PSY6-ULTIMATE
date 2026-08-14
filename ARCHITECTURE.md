@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v4.0)
+# PSY6 ULTIMATE — Full Architecture Specification (v5.1)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -27,7 +27,7 @@ The instrument is organized in 8 layers, top to bottom:
 | **Scheduler** | Swing, Humanize, Step Repeat/Prob, Track Delay Offset, Section Arranger |
 | **Engine Layer** | PooledEngine (20 synth + 24 drum), AudioBus, Compressors, Panners |
 | **FX Layer** | Drive, Filter, Delay, Reverb, Per-track sends/modes |
-| **Persistence** | localStorage (projects, patterns, grammars, snapshots, favorites) |
+| **Persistence** | localStorage (projects, patterns, grammars, snapshots, favorites, **pattern banks A-D**) |
 | **I/O Layer** | MIDI In/Out, Clock, WAV, Live Rec |
 
 ## 3. PooledEngine — Zero GC Architecture
@@ -202,6 +202,16 @@ FX components:
 - Export/Import: JSON files
 - Search: Real-time filter by name/ID
 
+### Pattern Banks (v5.0)
+- 4 banks: A, B, C, D
+- Each bank stores complete patterns (all 6 tracks)
+- Auto-save current bank before switching
+- Deep copy on save/load (no shared references)
+- Undo support on bank load
+- Persisted in project save/load
+- Keyboard: F1-F4 to switch banks
+- LCD shows current bank
+
 ## 9. I/O Layer — MIDI & Audio Export
 
 ### MIDI In
@@ -219,6 +229,7 @@ FX components:
 
 ### Audio Export
 - WAV Export: 4 bars via OfflineAudioContext render
+- **HQ WAV Export (v5.0): 44.1kHz CD-quality render via dedicated OfflineAudioContext**
 - Live Rec: MediaRecorder API (WebM/Opus), full performance
 
 ## 10. Preset System
@@ -259,7 +270,7 @@ Latency:
 ## 12. Keyboard Shortcuts (46 total)
 
 ### Transport
-SPACE=Play/Stop, T=Tap tempo, L=Section loop, Home=Section repeat
+SPACE=Play/Stop, Shift+Space=Global mute, T=Tap tempo, L=Section loop, Home=Section repeat, F1-F4=Pattern banks A-D
 
 ### Generation
 V=Variation, S=Randomizer, W=Chords, D/H/Z=Drums/Melody/Arp, E=All variations, F=Fill
@@ -291,12 +302,13 @@ No build step. No dependencies. No server required.
 - v1.x: Foundation (engine, FX, grammar, learning, persistence)
 - v2.x: Musicianship (chords, arp, MIDI, patterns, macros)
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
-- v4.x: Professional (repeat, compressor, random walk)
+- v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
+- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence
 
 ---
 
-Architecture version: 4.0
+Architecture version: 5.1
 Status: IMPLEMENTED
-Total code: 136.1 KB (single file)
-Total shortcuts: 46
+Total code: 146.1 KB (single file)
+Total shortcuts: 51
 Total features: 100+
