@@ -111,6 +111,11 @@ body.perf-mode .knob{width:72px;height:72px}
         <button id="btnLiveRec" onclick="toggleLiveRecording()">&#128308; LIVE REC</button>
         <button onclick="saveProject(prompt('Project name:','my-groove')||'default')">&#128190; SAVE</button>
         <button onclick="loadProject()">&#128194; LOAD</button>
+        <button onclick="switchPatternBank('A')" aria-label="Switch to pattern bank A">BANK A</button>
+        <button onclick="switchPatternBank('B')" aria-label="Switch to pattern bank B">BANK B</button>
+        <button onclick="switchPatternBank('C')" aria-label="Switch to pattern bank C">BANK C</button>
+        <button onclick="switchPatternBank('D')" aria-label="Switch to pattern bank D">BANK D</button>
+        <button onclick="exportWAVHighQuality()" aria-label="Export high quality WAV">&#127911; HQ WAV</button>
         <button onclick="toggleHelp()" aria-label="Show keyboard shortcuts help">&#10067; HELP</button>
         <button onclick="toggleMuteGroup('DRUMS')">&#129345; DRUMS</button>
         <button onclick="toggleMuteGroup('SYNTHS')">&#127929; SYNTHS</button>
@@ -1950,6 +1955,10 @@ document.addEventListener('keydown',e=>{
       const idx=parseInt(e.key)-1;
       if(idx<SECTIONS.length){currentSection=idx;currentBar=0;onSectionChange()}
       break;
+    case 'F1':e.preventDefault();switchPatternBank('A');break;
+    case 'F2':e.preventDefault();switchPatternBank('B');break;
+    case 'F3':e.preventDefault();switchPatternBank('C');break;
+    case 'F4':e.preventDefault();switchPatternBank('D');break;
   }
 });
 
@@ -3760,6 +3769,80 @@ function toggleGlobalMute(){
     btn.classList.toggle('active',globalMuted);
   }
   toast(globalMuted?'GLOBAL MUTE: ON':'GLOBAL MUTE: OFF');
+}
+
+// ============================================================
+// PATTERN BANKS — Save/load 4 pattern banks (A/B/C/D)
+// ============================================================
+let patternBanks = { A: null, B: null, C: null, D: null };
+let currentBank = 'A';
+
+function savePatternBank(bank){
+  if(!patternBanks.hasOwnProperty(bank))return;
+  patternBanks[bank] = JSON.parse(JSON.stringify(patterns));
+  toast('PATTERN BANK ' + bank + ' SAVED');
+}
+
+function loadPatternBank(bank){
+  if(!patternBanks.hasOwnProperty(bank))return;
+  if(!patternBanks[bank]){
+    toast('PATTERN BANK ' + bank + ' IS EMPTY');
+    return;
+  }
+  pushUndo();
+  patterns = JSON.parse(JSON.stringify(patternBanks[bank]));
+  currentBank = bank;
+  updateSeqUI();
+  toast('PATTERN BANK ' + bank + ' LOADED');
+}
+
+function switchPatternBank(bank){
+  // Auto-save current bank before switching
+  savePatternBank(currentBank);
+  loadPatternBank(bank);
+}
+
+// ============================================================
+// WAV EXPORT QUALITY — High quality WAV export
+// ============================================================
+function exportWAVHighQuality(){
+  if(!audioCtx)initAudio();
+  const barsToExport = 4;
+  const stepDur = 60/currentBpm/4;
+  const totalDur = barsToExport*16*stepDur + 1;
+  const sampleRate = 44100; // High quality sample rate
+  const offline = new OfflineAudioContext(2, sampleRate*totalDur, sampleRate);
+  const offEngine = new PooledEngine(offline);
+  let t = 0.1;
+  const trackNames = TRACK_NAMES_KEYS;
+  for(let bar=0; bar<barsToExport; bar++){
+    for(let step=0; step<16; step++){
+      for(let tr=0; tr<6; tr++){
+        if(trackMutes[tr])continue;
+        const pat = patterns[trackNames[tr]];
+        if(!pat || !pat[step] || !pat[step].on)continue;
+        const ev = pat[step];
+        if(tr===0){offEngine.triggerDrum(t, currentDrumPreset, ev.vel||0.8, 0)}
+        else if(tr===1){const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];const bn=36+(currentChordRoot||scale[0]);offEngine.triggerSynth(t, bn, currentPreset.bass, stepDur*0.4, 1)}
+        else if(tr===2){const pp=LIB.drum.find(function(d){return d.type==='hatC'})||currentDrumPreset;offEngine.triggerDrum(t, pp, ev.vel||0.5, 2)}
+        else if(tr===3){const scale=SCALES[currentScale]||SCALES['Phrygian Dominant'];const ln=60+scale[(ev.note||0)%scale.length];offEngine.triggerSynth(t, ln, currentPreset.lead, stepDur*1.5, 3)}
+        else if(tr===4){const arpNote=60+getArpNote(step);offEngine.triggerSynth(t, arpNote, currentPreset.arp, stepDur*0.8, 4)}
+        else if(tr===5){const chordNotes=getCurrentChordNotes();chordNotes.forEach(function(note){offEngine.triggerSynth(t, 48+note, currentPreset.pad, stepDur*8, 5)})}
+      }
+      t += stepDur;
+    }
+  }
+  offline.startRendering().then(function(buffer){
+    const wav = audioBufferToWav(buffer);
+    const blob = new Blob([wav], {type:'audio/wav'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'psy6-ultimate-hq-' + sampleRate + 'hz.wav';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('HQ WAV EXPORTED — ' + sampleRate + 'Hz');
+  }).catch(function(e){toast('EXPORT FAILED: '+e.message)});
 }
 
 // ============================================================
