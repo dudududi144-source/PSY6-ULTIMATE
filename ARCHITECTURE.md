@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v5.1)
+# PSY6 ULTIMATE — Full Architecture Specification (v5.3)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -21,7 +21,7 @@ The instrument is organized in 8 layers, top to bottom:
 
 | Layer | Components |
 |-------|-----------|
-| **UI Layer** | Knobs, XY Pad, Seq (M/S/Vol/FX/Pan), Arranger, Pads, Visualizers, Help |
+| **UI Layer** | Knobs, XY Pad, Seq (M/S/Vol/FX/Pan), Arranger, Pads, Visualizers, Help, **Track Colors** |
 | **Brain Layer** | CandidateGen, Grammars, ADAPTIVE |
 | **Composition** | Chord Progressions, Arpeggiator, Bass Modes, Pattern Operations |
 | **Scheduler** | Swing, Humanize, Step Repeat/Prob, Track Delay Offset, Section Arranger |
@@ -139,6 +139,7 @@ Chord behavior:
 - timeSource: AudioContext.currentTime (NOT Date.now)
 - BPM automation: per-section offsets (INTRO:-5, BREAK:-10, RISER:+5)
 - BPM ramp: gradual +/-10 over 4 bars
+- **Metronome (v5.2): Practice click with visual feedback (F5)**
 
 ### Humanization
 - Probability: per-step play chance (100/75/50/25%)
@@ -212,6 +213,19 @@ FX components:
 - Keyboard: F1-F4 to switch banks
 - LCD shows current bank
 
+### Metronome (v5.2)
+- Practice click with adjustable tempo (follows currentBpm)
+- Downbeat: 1200Hz, Beat: 800Hz
+- Visual feedback: LCD text-shadow flash
+- Keyboard: F5 to toggle
+- Stops automatically on engine stop
+
+### Track Colors (v5.2)
+- 6 distinct colors for visual distinction
+- KICK: red, BASS: orange, PERC: yellow
+- LEAD: green, ARP: blue, PAD: purple
+- Applied to track labels and active steps
+
 ## 9. I/O Layer — MIDI & Audio Export
 
 ### MIDI In
@@ -270,7 +284,7 @@ Latency:
 ## 12. Keyboard Shortcuts (46 total)
 
 ### Transport
-SPACE=Play/Stop, Shift+Space=Global mute, T=Tap tempo, L=Section loop, Home=Section repeat, F1-F4=Pattern banks A-D
+SPACE=Play/Stop, Shift+Space=Global mute, T=Tap tempo, L=Section loop, Home=Section repeat, F1-F4=Pattern banks A-D, Shift+F1-F4=Clear banks, F5=Metronome
 
 ### Generation
 V=Variation, S=Randomizer, W=Chords, D/H/Z=Drums/Melody/Arp, E=All variations, F=Fill
@@ -303,12 +317,12 @@ No build step. No dependencies. No server required.
 - v2.x: Musicianship (chords, arp, MIDI, patterns, macros)
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
-- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence
+- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12 Fixes
 
 ---
 
-Architecture version: 5.1
+Architecture version: 5.3
 Status: IMPLEMENTED
-Total code: 146.1 KB (single file)
-Total shortcuts: 51
+Total code: 149.7 KB (single file)
+Total shortcuts: 53
 Total features: 100+
