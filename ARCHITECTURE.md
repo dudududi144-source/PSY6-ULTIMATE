@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v5.4)
+# PSY6 ULTIMATE — Full Architecture Specification (v5.5)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -251,6 +251,14 @@ FX components:
 - **HQ WAV Export (v5.0): 44.1kHz CD-quality render via dedicated OfflineAudioContext**
 - Live Rec: MediaRecorder API (WebM/Opus), full performance
 
+### MIDI File Export (v5.5)
+- Standard MIDI File (SMF) format 0
+- 480 ticks per quarter note
+- Tempo meta event (current BPM)
+- 4 bars exported
+- Channels: KICK/PERC=9, BASS=0, LEAD=1, ARP=2, PAD=3
+- Delta-time encoded Note On/Off events
+
 ## 10. Preset System
 
 ### Genres & Categories
@@ -322,12 +330,12 @@ No build step. No dependencies. No server required.
 - v2.x: Musicianship (chords, arp, MIDI, patterns, macros)
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
-- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish
+- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)**
 
 ---
 
-Architecture version: 5.4
+Architecture version: 5.5
 Status: IMPLEMENTED
-Total code: 150.2 KB (single file)
+Total code: 154.3 KB (single file)
 Total shortcuts: 53
 Total features: 100+
