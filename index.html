@@ -229,6 +229,8 @@ body.perf-mode .knob{width:72px;height:72px}
     
     <h3 style="color:var(--accent);margin-top:12px">Patterns</h3>
     <table class="help-table">
+      <tr><td>F1-F4</td><td>Switch pattern bank A/B/C/D</td></tr>
+      <tr><td>Shift+F1-F4</td><td>Clear pattern bank A/B/C/D</td></tr>
       <tr><td>Q</td><td>Duplicate LEAD pattern to ARP</td></tr>
       <tr><td>I / O</td><td>Copy LEAD / Paste to ARP</td></tr>
       <tr><td>J</td><td>Swap LEAD and ARP patterns</td></tr>
@@ -255,6 +257,7 @@ body.perf-mode .knob{width:72px;height:72px}
     
     <h3 style="color:var(--accent);margin-top:12px">Timing &amp; Tempo</h3>
     <table class="help-table">
+      <tr><td>F5</td><td>Toggle metronome</td></tr>
       <tr><td>5 / 6</td><td>BPM ramp up / down (+/-10 over 4 bars)</td></tr>
       <tr><td>[ / ]</td><td>Adjust current section length (-2/+2 bars)</td></tr>
       <tr><td>Y</td><td>Toggle BPM automation (per-section)</td></tr>
@@ -1251,6 +1254,7 @@ function togglePlay(){
 function stopEngine(){
   isPlaying=false;
   clearInterval(schedulerInterval);
+  stopMetronome();
   if(engine)engine.killAll();
   currentStep=0;currentBar=0;currentSection=0;
   // Reset transient state
@@ -1956,10 +1960,10 @@ document.addEventListener('keydown',e=>{
       const idx=parseInt(e.key)-1;
       if(idx<SECTIONS.length){currentSection=idx;currentBar=0;onSectionChange()}
       break;
-    case 'F1':e.preventDefault();switchPatternBank('A');break;
-    case 'F2':e.preventDefault();switchPatternBank('B');break;
-    case 'F3':e.preventDefault();switchPatternBank('C');break;
-    case 'F4':e.preventDefault();switchPatternBank('D');break;
+    case 'F1':e.preventDefault();if(e.shiftKey){clearPatternBank('A')}else{switchPatternBank('A')};break;
+    case 'F2':e.preventDefault();if(e.shiftKey){clearPatternBank('B')}else{switchPatternBank('B')};break;
+    case 'F3':e.preventDefault();if(e.shiftKey){clearPatternBank('C')}else{switchPatternBank('C')};break;
+    case 'F4':e.preventDefault();if(e.shiftKey){clearPatternBank('D')}else{switchPatternBank('D')};break;
     case 'F5':e.preventDefault();toggleMetronome();break;
   }
 });
@@ -2450,7 +2454,8 @@ function exportSong(){
         pad:currentPreset.pad?currentPreset.pad.id:null,
         drum:currentDrumPreset?currentDrumPreset.id:null
       },
-      knobValues:knobValues
+      knobValues:knobValues,
+      banks:JSON.parse(JSON.stringify(patternBanks))
     };
     const blob=new Blob([JSON.stringify(song,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -2489,6 +2494,9 @@ function importSong(){
           Object.keys(song.knobValues).forEach(k=>{
             if(knobValues.hasOwnProperty(k))knobValues[k]=song.knobValues[k];
           });
+        }
+        if(song.banks){
+          patternBanks=song.banks;
         }
         // Restore presets by ID
         if(song.presets){
@@ -3938,6 +3946,19 @@ function applyTrackColors(){
 }
 
 // ============================================================
+// CLEAR PATTERN BANK — Reset a bank to empty
+// ============================================================
+function clearPatternBank(bank){
+  if(!patternBanks.hasOwnProperty(bank))return;
+  patternBanks[bank]=null;
+  if(currentBank===bank){
+    toast('PATTERN BANK '+bank+' CLEARED');
+  } else {
+    toast('PATTERN BANK '+bank+' CLEARED');
+  }
+}
+
+// ============================================================
 // INIT
 // ============================================================
 function init(){
@@ -3975,6 +3996,9 @@ function init(){
   
   // Auto-update LCD
   setInterval(()=>{if(isPlaying)updateLCD()},200);
+  
+  // Apply track colors
+  applyTrackColors();
   
   
   
