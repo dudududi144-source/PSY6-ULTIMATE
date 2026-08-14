@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v5.3)
+# PSY6 ULTIMATE — Full Architecture Specification (v5.4)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -226,6 +226,11 @@ FX components:
 - LEAD: green, ARP: blue, PAD: purple
 - Applied to track labels and active steps
 
+### Round 13 Fixes (v5.4)
+- Help panel: Added Shift+Space, F1-F4, Shift+F1-F4, F5 to Transport section
+- Version display: Added v5.3 to header
+- Meta description: Added for SEO
+
 ## 9. I/O Layer — MIDI & Audio Export
 
 ### MIDI In
@@ -317,12 +322,12 @@ No build step. No dependencies. No server required.
 - v2.x: Musicianship (chords, arp, MIDI, patterns, macros)
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
-- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12 Fixes
+- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish
 
 ---
 
-Architecture version: 5.3
+Architecture version: 5.4
 Status: IMPLEMENTED
-Total code: 149.7 KB (single file)
+Total code: 150.2 KB (single file)
 Total shortcuts: 53
 Total features: 100+
