@@ -174,6 +174,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 4.9 | ARIA accessibility (7 elements) + global mute toggle (Shift+Space) |
 | 5.0 | **MAJOR**: Pattern Banks (A/B/C/D, F1-F4) + High Quality WAV Export (44.1kHz) |
 | 5.1 | LCD bank display + pattern banks persistence in save/load |
+| 5.2 | Metronome (F5) with visual feedback + Track colors for visual distinction |
 
 ## License
 
