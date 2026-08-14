@@ -172,6 +172,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 4.7 | applyBestCandidate empty guard, notes array guarantee, sampleMelodicInterval null check |
 | 4.8 | Refactor: centralized TRACK_NAMES constants (23 replacements) + debounced resize handler |
 | 4.9 | ARIA accessibility (7 elements) + global mute toggle (Shift+Space) |
+| 5.0 | **MAJOR**: Pattern Banks (A/B/C/D, F1-F4) + High Quality WAV Export (44.1kHz) |
 
 ## License
 
