@@ -1343,7 +1343,7 @@ function updateLCD(){
   if(!lcdSection||!lcdInfo)return;
   const sectionBars=SECTION_BARS[SECTIONS[currentSection]]||8;
   lcdSection.textContent=SECTIONS[currentSection];
-  lcdInfo.textContent='BAR '+(currentBar+1)+'/'+sectionBars+' | BPM '+Math.round(currentBpm)+' | VAR '+currentVariation;
+  lcdInfo.textContent='BAR '+(currentBar+1)+'/'+sectionBars+' | BPM '+Math.round(currentBpm)+' | VAR '+currentVariation+' | BANK '+currentBank;
 }
 
 function updateSectionBtns(){
@@ -1972,6 +1972,8 @@ function serializeState(){
     version:'1.4',
     seed:seed,
     bpm:currentBpm,
+    bank:currentBank,
+    banks:JSON.parse(JSON.stringify(patternBanks)),
     swing:currentSwing,
     genre:currentGenre,
     scale:currentScale,
@@ -2027,6 +2029,8 @@ function applyLoadedState(state){
   // Restore core state
   seed=state.seed||Date.now();
   currentBpm=state.bpm||145;
+  currentBank=state.bank||'A';
+  if(state.banks){patternBanks=state.banks}
   currentSwing=state.swing||0;
   currentGenre=state.genre||'PSYTRANCE';
   currentScale=state.scale||'Phrygian Dominant';
