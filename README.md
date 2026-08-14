@@ -177,6 +177,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 5.2 | Metronome (F5) with visual feedback + Track colors for visual distinction |
 | 5.3 | Round 12 fixes: metronome stop, track colors init, pattern banks in export/import, clear bank (Shift+F1-F4) |
 | 5.4 | Round 13 fixes: help panel shortcuts, version display, meta description |
+| 5.5 | MIDI file export (Standard MIDI File format) with MIDI export button |
 
 ### Stability Testing (Rounds 7-14)
 
