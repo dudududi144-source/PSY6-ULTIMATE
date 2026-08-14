@@ -180,6 +180,25 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 5.5 | MIDI file export (Standard MIDI File format) with MIDI export button |
 | 5.6 | Step probability visualization + Preset Morphing Chain (auto-morph every 4 bars) |
 
+### New Features Testing (Round 16)
+
+**Probability Visualization Testing:**
+- ✓ In updateSeqUI
+- ✓ Correct opacity formula (0.4 + prob * 0.6)
+- ✓ Correct condition (ev.on && ev.prob !== undefined && ev.prob < 1.0)
+
+**Morphing Chain Testing:**
+- ✓ morphChainEnabled state exists
+- ✓ toggleMorphChain function exists
+- ✓ checkMorphChain function exists
+- ✓ Wired into bar advancement
+- ✓ Button exists
+- ✓ Uses morphPresets
+- ✓ morphChainIndex exists
+- ✓ Mentioned in help panel
+
+**RESULT: ALL NEW FEATURES WORKING CORRECTLY ✓**
+
 ### MIDI Export Testing (Round 15)
 
 **MIDI Export Testing:**
