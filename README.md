@@ -179,6 +179,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 5.4 | Round 13 fixes: help panel shortcuts, version display, meta description |
 | 5.5 | MIDI file export (Standard MIDI File format) with MIDI export button |
 | 5.6 | Step probability visualization + Preset Morphing Chain (auto-morph every 4 bars) |
+| 5.7 | Step repeat visualization (border + tooltip) + Preset favorites visualization (gold border + glow) |
 
 ### New Features Testing (Round 16)
 
