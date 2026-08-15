@@ -182,6 +182,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 5.7 | Step repeat visualization (border + tooltip) + Preset favorites visualization (gold border + glow) |
 | 5.8 | Round 17 fixes: favorites added to help panel |
 | 5.9 | MIDI file import (SMF parsing + pattern mapping) with MIDI import button |
+| 6.0 | **MAJOR**: Song Arrangement (add/remove/clear/play sections with repeat) |
 
 ### MIDI Import Testing (Round 19)
 
