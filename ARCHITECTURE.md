@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v5.8)
+# PSY6 ULTIMATE — Full Architecture Specification (v5.9)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -259,6 +259,16 @@ FX components:
 - Channels: KICK/PERC=9, BASS=0, LEAD=1, ARP=2, PAD=3
 - Delta-time encoded Note On/Off events
 
+### MIDI File Import (v5.9)
+- Standard MIDI File (SMF) parsing
+- MThd header + MTrk track parsing
+- Delta-time decoding (variable length)
+- Note On/Off event extraction
+- Maps first 16 notes to LEAD pattern
+- Converts MIDI note to scale degree
+- Undo support (pushUndo)
+- **ROUND-TRIP COMPLETE: Export → Import → Export**
+
 ### Step Probability Visualization (v5.6)
 - Steps with probability < 1.0 shown with reduced opacity
 - opacity = 0.4 + prob * 0.6
@@ -353,12 +363,12 @@ No build step. No dependencies. No server required.
 - v2.x: Musicianship (chords, arp, MIDI, patterns, macros)
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
-- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)** + **Probability Viz + Morphing Chain** + **Repeat Viz + Favorites Viz** + **Round 17 Fixes**
+- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)** + **Probability Viz + Morphing Chain** + **Repeat Viz + Favorites Viz** + **Round 17 Fixes** + **MIDI File Import (round-trip)**
 
 ---
 
-Architecture version: 5.8
+Architecture version: 5.9
 Status: IMPLEMENTED
-Total code: 156.1 KB (single file)
+Total code: 160.6 KB (single file)
 Total shortcuts: 53
 Total features: 100+
