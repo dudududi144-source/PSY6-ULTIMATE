@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v5.6)
+# PSY6 ULTIMATE — Full Architecture Specification (v5.7)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -265,6 +265,18 @@ FX components:
 - Visual distinction for humanized patterns
 - Helps identify ghost notes and probabilistic steps
 
+### Step Repeat Visualization (v5.7)
+- Steps with repeat > 1 shown with orange border
+- Tooltip displays repeat count ("Repeat x2", "Repeat x3", etc.)
+- Helps identify complex rhythmic patterns
+- Visual distinction for multi-hit steps
+
+### Preset Favorites Visualization (v5.7)
+- Favorite presets shown with gold border and glow
+- Star prefix (★) for favorites
+- Visual hierarchy in preset list
+- Quick identification of preferred sounds
+
 ## 10. Preset System
 
 ### Genres & Categories
@@ -337,12 +349,12 @@ No build step. No dependencies. No server required.
 - v2.x: Musicianship (chords, arp, MIDI, patterns, macros)
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
-- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)** + **Probability Viz + Morphing Chain**
+- v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)** + **Probability Viz + Morphing Chain** + **Repeat Viz + Favorites Viz**
 
 ---
 
-Architecture version: 5.6
+Architecture version: 5.7
 Status: IMPLEMENTED
-Total code: 155.6 KB (single file)
+Total code: 156.0 KB (single file)
 Total shortcuts: 53
 Total features: 100+
