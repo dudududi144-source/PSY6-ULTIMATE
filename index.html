@@ -953,11 +953,14 @@ class PooledEngine{
     this.masterFilter.connect(this.reverb);
     this.reverb.connect(this.reverbMix);
     this.reverbMix.connect(this.comp);
-    this.comp.connect(this.analyser);
+    // Connect chain: comp -> saturator -> limiter -> analyser -> destination (v6.4)
+    this.comp.connect(this.saturator);
+    this.saturator.connect(this.limiter);
+    this.limiter.connect(this.analyser);
     this.analyser.connect(ctx.destination);
     // Recording destination (for live capture)
     this.recDest=ctx.createMediaStreamDestination();
-    this.comp.connect(this.recDest);
+    this.limiter.connect(this.recDest);
     // Noise buffer
     const bufLen=ctx.sampleRate*2;
     this.noiseBuffer=ctx.createBuffer(1,bufLen,ctx.sampleRate);
