@@ -187,6 +187,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 6.2 | Round 21 fixes: songArrangement added to serializeState (persistence fix) |
 | 6.3 | Arrangement reorder (move up/down) + Arrangement duplicate |
 | 6.4 | Sound quality enhancements (limiter + saturator + improved analyser) |
+| 6.5 | Round 24 fixes: connected limiter, saturator, and analyser in master chain |
 
 ### Final Comprehensive Check (Round 22)
 
