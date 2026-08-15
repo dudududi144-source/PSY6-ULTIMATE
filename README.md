@@ -183,6 +183,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 5.8 | Round 17 fixes: favorites added to help panel |
 | 5.9 | MIDI file import (SMF parsing + pattern mapping) with MIDI import button |
 | 6.0 | **MAJOR**: Song Arrangement (add/remove/clear/play sections with repeat) |
+| 6.1 | Arrangement persistence (save/load) + Arrangement export/import (JSON) |
 
 ### Song Arrangement Testing (Round 20)
 
