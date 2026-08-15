@@ -907,7 +907,11 @@ class PooledEngine{
     this.comp=ctx.createDynamicsCompressor();
     this.comp.threshold.value=-8;this.comp.knee.value=12;
     this.comp.ratio.value=6;this.comp.attack.value=0.003;this.comp.release.value=0.2;
-    this.analyser=ctx.createAnalyser();this.analyser.fftSize=256;
+    // Explicit limiter for safety (v6.4)
+    this.limiter=ctx.createDynamicsCompressor();
+    this.limiter.threshold.value=-1;this.limiter.knee.value=0;
+    this.limiter.ratio.value=20;this.limiter.attack.value=0.001;this.limiter.release.value=0.01;
+    this.analyser=ctx.createAnalyser();this.analyser.fftSize=2048;this.analyser.smoothingTimeConstant=0.8;
     // Master filter (XY pad controls this)
     this.masterFilter=ctx.createBiquadFilter();
     this.masterFilter.type='lowpass';
@@ -924,6 +928,15 @@ class PooledEngine{
     this.reverbMix=ctx.createGain();this.reverbMix.gain.value=0.18;
     // Drive (waveshaper)
     this.drive=ctx.createWaveShaper();
+    this.drive.curve=makeDriveCurve(2.0);
+    this.drive.oversample='2x';
+    // Saturator for warmth (v6.4)
+    this.saturator=ctx.createWaveShaper();
+    this.saturator.curve=makeDriveCurve(1.2);
+    this.saturator.oversample='2x';
+    this.saturatorMix=ctx.createGain();
+    this.saturatorMix.gain.value=0.15;
+    this.drive.createWaveShaper();
     this.drive.curve=this.makeDriveCurve(0);
     this.drive.oversample='2x';
     // Chain: master -> drive -> masterFilter -> comp -> analyser -> destination
