@@ -185,6 +185,7 @@ After fixing all 59 bugs, two additional rounds of advanced testing were perform
 | 6.0 | **MAJOR**: Song Arrangement (add/remove/clear/play sections with repeat) |
 | 6.1 | Arrangement persistence (save/load) + Arrangement export/import (JSON) |
 | 6.2 | Round 21 fixes: songArrangement added to serializeState (persistence fix) |
+| 6.3 | Arrangement reorder (move up/down) + Arrangement duplicate |
 
 ### Final Comprehensive Check (Round 22)
 
