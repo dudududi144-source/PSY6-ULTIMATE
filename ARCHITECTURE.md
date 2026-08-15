@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v6.2)
+# PSY6 ULTIMATE — Full Architecture Specification (v6.3)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -286,6 +286,10 @@ FX components:
 - songArrangement added to serializeState (persistence fix)
 - Arrangement persistence fully working
 
+### Arrangement Reorder + Duplicate (v6.3)
+- **Reorder (v6.3): Move sections up/down with ↑ ↓ buttons**
+- **Duplicate (v6.3): Duplicate entire arrangement with 📋 DUPLICATE button**
+
 ### Step Probability Visualization (v5.6)
 - Steps with probability < 1.0 shown with reduced opacity
 - opacity = 0.4 + prob * 0.6
@@ -381,12 +385,12 @@ No build step. No dependencies. No server required.
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
 - v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)** + **Probability Viz + Morphing Chain** + **Repeat Viz + Favorites Viz** + **Round 17 Fixes** + **MIDI File Import (round-trip)**
-- v6.x: **MAJOR**: **Song Arrangement** (arrange sections into complete songs with repeat) + **Arrangement Persistence + Export/Import** + **Round 21 Fixes**
+- v6.x: **MAJOR**: **Song Arrangement** (arrange sections into complete songs with repeat) + **Arrangement Persistence + Export/Import** + **Round 21 Fixes** + **Arrangement Reorder + Duplicate**
 
 ---
 
-Architecture version: 6.2
+Architecture version: 6.3
 Status: IMPLEMENTED
-Total code: 167.1 KB (single file)
+Total code: 168.7 KB (single file)
 Total shortcuts: 53
 Total features: 100+
