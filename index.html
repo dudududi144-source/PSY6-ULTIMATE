@@ -137,6 +137,8 @@ body.perf-mode .knob{width:72px;height:72px}
           <button onclick="playArrangement()" style="font-size:10px;padding:2px 8px">▶ PLAY</button>
           <button onclick="stopArrangement()" style="font-size:10px;padding:2px 8px">■ STOP</button>
           <button onclick="clearArrangement()" style="font-size:10px;padding:2px 8px">✕ CLEAR</button>
+          <button onclick="exportArrangement()" style="font-size:10px;padding:2px 8px">📤 EXPORT</button>
+          <button onclick="importArrangement()" style="font-size:10px;padding:2px 8px">📥 IMPORT</button>
         </div>
         <div id="arrangementList" style="max-height:100px;overflow-y:auto;font-size:11px"></div>
       </div>
@@ -2080,6 +2082,7 @@ function applyLoadedState(state){
   currentBpm=state.bpm||145;
   currentBank=state.bank||'A';
   if(state.banks){patternBanks=state.banks}
+  if(state.arrangement){songArrangement=state.arrangement;updateArrangementUI()}
   currentSwing=state.swing||0;
   currentGenre=state.genre||'PSYTRANCE';
   currentScale=state.scale||'Phrygian Dominant';
@@ -2498,7 +2501,8 @@ function exportSong(){
         drum:currentDrumPreset?currentDrumPreset.id:null
       },
       knobValues:knobValues,
-      banks:JSON.parse(JSON.stringify(patternBanks))
+      banks:JSON.parse(JSON.stringify(patternBanks)),
+      arrangement:JSON.parse(JSON.stringify(songArrangement))
     };
     const blob=new Blob([JSON.stringify(song,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -4443,6 +4447,60 @@ function checkArrangementAdvancement(){
   if(arrangementPlaying){
     advanceArrangement();
   }
+}
+
+// ============================================================
+// ARRANGEMENT EXPORT/IMPORT — Save/load arrangement as JSON
+// ============================================================
+function exportArrangement(){
+  if(songArrangement.length === 0){
+    toast('ARRANGEMENT IS EMPTY — nothing to export');
+    return;
+  }
+  const data = {
+    version: '1.0',
+    exportedAt: Date.now(),
+    arrangement: songArrangement
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'psy6-arrangement-'+Date.now()+'.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('ARRANGEMENT EXPORTED — '+songArrangement.length+' sections');
+}
+
+function importArrangement(){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = function(e){
+    const file = e.target.files[0];
+    if(!file)return;
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        const data = JSON.parse(ev.target.result);
+        if(data.arrangement && Array.isArray(data.arrangement)){
+          songArrangement = data.arrangement;
+          arrangementIndex = 0;
+          arrangementRepeatCount = 0;
+          arrangementPlaying = false;
+          updateArrangementUI();
+          toast('ARRANGEMENT IMPORTED — '+songArrangement.length+' sections');
+        } else {
+          toast('INVALID ARRANGEMENT FILE');
+        }
+      }catch(err){
+        toast('ARRANGEMENT IMPORT FAILED: '+err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ============================================================
