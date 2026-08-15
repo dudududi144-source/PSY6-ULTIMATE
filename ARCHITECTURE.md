@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v6.4)
+# PSY6 ULTIMATE — Full Architecture Specification (v6.5)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -258,6 +258,11 @@ FX components:
 - Master chain: gain -> compressor -> limiter -> analyser -> destination
 - Parallel: drive, saturator, delay, reverb, masterFilter
 
+### Round 24 Fixes (v6.5)
+- Master chain connectivity fixed: comp -> saturator -> limiter -> analyser -> destination
+- Recording destination connected to limiter (not comp)
+- All sound quality enhancements fully connected
+
 ### MIDI File Export (v5.5)
 - Standard MIDI File (SMF) format 0
 - 480 ticks per quarter note
@@ -392,12 +397,12 @@ No build step. No dependencies. No server required.
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
 - v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)** + **Probability Viz + Morphing Chain** + **Repeat Viz + Favorites Viz** + **Round 17 Fixes** + **MIDI File Import (round-trip)**
-- v6.x: **MAJOR**: **Song Arrangement** (arrange sections into complete songs with repeat) + **Arrangement Persistence + Export/Import** + **Round 21 Fixes** + **Arrangement Reorder + Duplicate** + **Sound Quality Enhancements**
+- v6.x: **MAJOR**: **Song Arrangement** (arrange sections into complete songs with repeat) + **Arrangement Persistence + Export/Import** + **Round 21 Fixes** + **Arrangement Reorder + Duplicate** + **Sound Quality Enhancements** + **Round 24 Fixes**
 
 ---
 
-Architecture version: 6.4
+Architecture version: 6.5
 Status: IMPLEMENTED
-Total code: 169.3 KB (single file)
+Total code: 169.4 KB (single file)
 Total shortcuts: 53
 Total features: 100+
