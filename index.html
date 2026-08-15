@@ -1463,6 +1463,11 @@ function updateSeqUI(){
       if(ev&&ev.on&&ev.prob!==undefined&&ev.prob<1.0){
         step.style.opacity=0.4+ev.prob*0.6;
       }
+      // Repeat visualization: border based on repeat count
+      if(ev&&ev.on&&ev.repeat!==undefined&&ev.repeat>1){
+        step.style.border='2px solid #ffaa00';
+        step.title='Repeat x'+ev.repeat;
+      }
       step.dataset.step=s;
       step.dataset.track=t;
       step.onclick=()=>{
@@ -1667,8 +1672,14 @@ function buildPresetChips(){
     }).forEach(p=>{
       const chip=document.createElement('div');
       chip.className='chip'+(currentPreset[cat]&&currentPreset[cat].id===p.id?' active':'');
-      const star=presetFavorites.has(p.id)?'★ ':'';
+      const isFav=presetFavorites.has(p.id);
+      const star=isFav?'★ ':'';
       chip.textContent=star+p.name;
+      // Favorites visualization: gold border for favorites
+      if(isFav){
+        chip.style.border='1px solid #ffd700';
+        chip.style.boxShadow='0 0 5px rgba(255,215,0,0.3)';
+      }
       chip.onclick=()=>{currentPreset[cat]=p;addToPresetHistory(p);buildPresetChips();toast(cat.toUpperCase()+': '+p.name)};
       chip.oncontextmenu=(e)=>{e.preventDefault();toggleFavorite(p.id)};
       container.appendChild(chip);
