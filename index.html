@@ -37,6 +37,8 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
 .arrangement-section{flex:1;font-weight:bold}
 .arrangement-repeat{color:var(--accent);cursor:pointer}
 .arrangement-remove{cursor:pointer;color:#ff4444}
+.arrangement-up{cursor:pointer;color:var(--accent);margin-right:4px}
+.arrangement-down{cursor:pointer;color:var(--accent);margin-right:4px}
 .seq-grid{display:flex;flex-direction:column;gap:4px}
 .seq-row{display:flex;align-items:center;gap:4px}
 .seq-label{width:50px;font-size:9px;color:var(--text-dim);text-transform:uppercase}
@@ -139,6 +141,7 @@ body.perf-mode .knob{width:72px;height:72px}
           <button onclick="clearArrangement()" style="font-size:10px;padding:2px 8px">✕ CLEAR</button>
           <button onclick="exportArrangement()" style="font-size:10px;padding:2px 8px">📤 EXPORT</button>
           <button onclick="importArrangement()" style="font-size:10px;padding:2px 8px">📥 IMPORT</button>
+          <button onclick="duplicateArrangement()" style="font-size:10px;padding:2px 8px">📋 DUPLICATE</button>
         </div>
         <div id="arrangementList" style="max-height:100px;overflow-y:auto;font-size:11px"></div>
       </div>
@@ -4432,7 +4435,9 @@ function updateArrangementUI(){
   songArrangement.forEach(function(item, idx){
     const div = document.createElement('div');
     div.className = 'arrangement-item';
-    div.innerHTML = '<span class="arrangement-section">'+item.section+'</span>' +
+    div.innerHTML = '<span class="arrangement-up" onclick="moveArrangementItem('+idx+',-1)">↑</span>' +
+      '<span class="arrangement-down" onclick="moveArrangementItem('+idx+',1)">↓</span>' +
+      '<span class="arrangement-section">'+item.section+'</span>' +
       '<span class="arrangement-repeat">x'+item.repeat+'</span>' +
       '<span class="arrangement-remove" onclick="removeFromArrangement('+idx+')">✕</span>';
     div.querySelector('.arrangement-repeat').onclick = function(e){
@@ -4502,6 +4507,37 @@ function importArrangement(){
     reader.readAsText(file);
   };
   input.click();
+}
+
+// ============================================================
+// ARRANGEMENT REORDER — Move sections up/down in arrangement
+// ============================================================
+function moveArrangementItem(idx, direction){
+  if(idx < 0 || idx >= songArrangement.length)return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= songArrangement.length)return;
+  
+  // Swap items
+  const temp = songArrangement[idx];
+  songArrangement[idx] = songArrangement[newIdx];
+  songArrangement[newIdx] = temp;
+  
+  updateArrangementUI();
+  toast('SECTION MOVED ' + (direction < 0 ? 'UP' : 'DOWN'));
+}
+
+// ============================================================
+// ARRANGEMENT DUPLICATE — Duplicate entire arrangement
+// ============================================================
+function duplicateArrangement(){
+  if(songArrangement.length === 0){
+    toast('ARRANGEMENT IS EMPTY — nothing to duplicate');
+    return;
+  }
+  const copy = JSON.parse(JSON.stringify(songArrangement));
+  songArrangement = songArrangement.concat(copy);
+  updateArrangementUI();
+  toast('ARRANGEMENT DUPLICATED — now '+songArrangement.length+' sections');
 }
 
 // ============================================================
