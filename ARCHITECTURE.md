@@ -1,4 +1,4 @@
-# PSY6 ULTIMATE — Full Architecture Specification (v6.3)
+# PSY6 ULTIMATE — Full Architecture Specification (v6.4)
 
 > One file. Zero server. Infinite groove.
 > 136KB of pure Web Audio API. No dependencies. No build step.
@@ -251,6 +251,13 @@ FX components:
 - **HQ WAV Export (v5.0): 44.1kHz CD-quality render via dedicated OfflineAudioContext**
 - Live Rec: MediaRecorder API (WebM/Opus), full performance
 
+### Sound Quality Enhancements (v6.4)
+- **Explicit Limiter (v6.4): Brickwall limiting at -1 dB**
+- **Saturator (v6.4): Warmth enhancement with soft saturation**
+- **Improved Analyser (v6.4): fftSize 2048 for better resolution**
+- Master chain: gain -> compressor -> limiter -> analyser -> destination
+- Parallel: drive, saturator, delay, reverb, masterFilter
+
 ### MIDI File Export (v5.5)
 - Standard MIDI File (SMF) format 0
 - 480 ticks per quarter note
@@ -385,12 +392,12 @@ No build step. No dependencies. No server required.
 - v3.x: Control (40+ shortcuts, per-track, transitions, pan)
 - v4.x: Professional (repeat, compressor, random walk) + Bug Fixes (59) + Refactoring + Accessibility
 - v5.x: **MAJOR**: Pattern Banks (A/B/C/D) + HQ WAV Export (44.1kHz) + Bank Persistence + Metronome + Track Colors + Round 12-13 Fixes + Polish + **MIDI File Export (SMF)** + **Probability Viz + Morphing Chain** + **Repeat Viz + Favorites Viz** + **Round 17 Fixes** + **MIDI File Import (round-trip)**
-- v6.x: **MAJOR**: **Song Arrangement** (arrange sections into complete songs with repeat) + **Arrangement Persistence + Export/Import** + **Round 21 Fixes** + **Arrangement Reorder + Duplicate**
+- v6.x: **MAJOR**: **Song Arrangement** (arrange sections into complete songs with repeat) + **Arrangement Persistence + Export/Import** + **Round 21 Fixes** + **Arrangement Reorder + Duplicate** + **Sound Quality Enhancements**
 
 ---
 
-Architecture version: 6.3
+Architecture version: 6.4
 Status: IMPLEMENTED
-Total code: 168.7 KB (single file)
+Total code: 169.3 KB (single file)
 Total shortcuts: 53
 Total features: 100+
