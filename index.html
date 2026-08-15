@@ -33,6 +33,10 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
 .xy-pad{width:100%;height:160px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;position:relative;cursor:crosshair;overflow:hidden}
 .xy-pad .crosshair-x{position:absolute;top:0;width:1px;height:100%;background:var(--accent);opacity:.5}
 .xy-pad .crosshair-y{position:absolute;left:0;height:1px;width:100%;background:var(--accent);opacity:.5}
+.arrangement-item{display:flex;align-items:center;gap:8px;padding:3px 6px;background:var(--panel);border-radius:4px;margin-bottom:2px}
+.arrangement-section{flex:1;font-weight:bold}
+.arrangement-repeat{color:var(--accent);cursor:pointer}
+.arrangement-remove{cursor:pointer;color:#ff4444}
 .seq-grid{display:flex;flex-direction:column;gap:4px}
 .seq-row{display:flex;align-items:center;gap:4px}
 .seq-label{width:50px;font-size:9px;color:var(--text-dim);text-transform:uppercase}
@@ -126,6 +130,16 @@ body.perf-mode .knob{width:72px;height:72px}
         <button onclick="toggleMuteGroup('SYNTHS')">&#127929; SYNTHS</button>
       </div>
       <div class="section-btns" id="sectionBtns"></div>
+      <div class="arrangement-panel">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-weight:bold;font-size:12px">🎵 SONG ARRANGEMENT</span>
+          <button onclick="addToArrangement()" style="font-size:10px;padding:2px 8px">+ ADD</button>
+          <button onclick="playArrangement()" style="font-size:10px;padding:2px 8px">▶ PLAY</button>
+          <button onclick="stopArrangement()" style="font-size:10px;padding:2px 8px">■ STOP</button>
+          <button onclick="clearArrangement()" style="font-size:10px;padding:2px 8px">✕ CLEAR</button>
+        </div>
+        <div id="arrangementList" style="max-height:100px;overflow-y:auto;font-size:11px"></div>
+      </div>
     </div>
 
     <div class="panel">
@@ -1070,6 +1084,8 @@ function scheduler(){
         }
         // If sectionLoopEnabled, stay on current section (bar resets to 0)
       }
+      // Check arrangement advancement
+      checkArrangementAdvancement();
       // Generate new candidates every 4 bars in GENERATIVE mode
       if(brainMode==='GENERATIVE'&&currentBar%4===0){
         applyBestCandidate();
@@ -4309,6 +4325,124 @@ function applyMIDIToPatterns(midiData){
   }
   
   updateSeqUI();
+}
+
+// ============================================================
+// SONG ARRANGEMENT — Arrange sections into a complete song
+// ============================================================
+let songArrangement = [];
+let arrangementPlaying = false;
+let arrangementIndex = 0;
+let arrangementRepeatCount = 0;
+
+function addToArrangement(){
+  const section = SECTIONS[currentSection];
+  songArrangement.push({section, repeat:1});
+  updateArrangementUI();
+  toast('ADDED TO ARRANGEMENT: '+section);
+}
+
+function removeFromArrangement(idx){
+  if(idx>=0 && idx<songArrangement.length){
+    songArrangement.splice(idx,1);
+    updateArrangementUI();
+    toast('REMOVED FROM ARRANGEMENT');
+  }
+}
+
+function clearArrangement(){
+  songArrangement = [];
+  arrangementIndex = 0;
+  arrangementRepeatCount = 0;
+  arrangementPlaying = false;
+  updateArrangementUI();
+  toast('ARRANGEMENT CLEARED');
+}
+
+function cycleArrangementRepeat(idx){
+  if(idx>=0 && idx<songArrangement.length){
+    songArrangement[idx].repeat = (songArrangement[idx].repeat % 4) + 1;
+    updateArrangementUI();
+  }
+}
+
+function playArrangement(){
+  if(songArrangement.length === 0){
+    toast('ARRANGEMENT IS EMPTY');
+    return;
+  }
+  arrangementPlaying = true;
+  arrangementIndex = 0;
+  arrangementRepeatCount = 0;
+  applyArrangementSection();
+  toast('PLAYING ARRANGEMENT — '+songArrangement.length+' sections');
+}
+
+function stopArrangement(){
+  arrangementPlaying = false;
+  arrangementIndex = 0;
+  arrangementRepeatCount = 0;
+  toast('ARRANGEMENT STOPPED');
+}
+
+function applyArrangementSection(){
+  if(!arrangementPlaying || arrangementIndex >= songArrangement.length){
+    arrangementPlaying = false;
+    return;
+  }
+  const item = songArrangement[arrangementIndex];
+  const sectionIdx = SECTIONS.indexOf(item.section);
+  if(sectionIdx >= 0){
+    currentSection = sectionIdx;
+    currentBar = 0;
+    onSectionChange();
+    updateSectionBtns();
+  }
+}
+
+function advanceArrangement(){
+  if(!arrangementPlaying)return;
+  arrangementRepeatCount++;
+  const item = songArrangement[arrangementIndex];
+  if(arrangementRepeatCount >= item.repeat){
+    arrangementRepeatCount = 0;
+    arrangementIndex++;
+    if(arrangementIndex >= songArrangement.length){
+      arrangementPlaying = false;
+      toast('ARRANGEMENT COMPLETE');
+    } else {
+      applyArrangementSection();
+    }
+  }
+}
+
+function updateArrangementUI(){
+  const container = document.getElementById('arrangementList');
+  if(!container)return;
+  container.innerHTML = '';
+  if(songArrangement.length === 0){
+    container.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:8px">Empty arrangement. Add sections using the + button.</div>';
+    return;
+  }
+  songArrangement.forEach(function(item, idx){
+    const div = document.createElement('div');
+    div.className = 'arrangement-item';
+    div.innerHTML = '<span class="arrangement-section">'+item.section+'</span>' +
+      '<span class="arrangement-repeat">x'+item.repeat+'</span>' +
+      '<span class="arrangement-remove" onclick="removeFromArrangement('+idx+')">✕</span>';
+    div.querySelector('.arrangement-repeat').onclick = function(e){
+      e.stopPropagation();
+      cycleArrangementRepeat(idx);
+    };
+    container.appendChild(div);
+  });
+}
+
+// Wire arrangement into section advancement
+function checkArrangementAdvancement(){
+  if(arrangementPlaying){
+    advanceArrangement();
+  }
 }
 
 // ============================================================
