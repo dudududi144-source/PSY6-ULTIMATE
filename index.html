@@ -2038,6 +2038,7 @@ function serializeState(){
       rhythm:{kickOnset:grammars.rhythm.kickOnset,kickCount:grammars.rhythm.kickCount}
     },
     musicalState:musicalState,
+    arrangement:JSON.parse(JSON.stringify(songArrangement)),
     savedAt:Date.now()
   };
 }
