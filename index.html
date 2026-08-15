@@ -120,6 +120,7 @@ body.perf-mode .knob{width:72px;height:72px}
         <button id="btnMetronome" onclick="toggleMetronome()" aria-label="Toggle metronome">&#128338; METRO</button>
         <button onclick="exportMIDI()" aria-label="Export patterns as MIDI file">&#127932; MIDI</button>
         <button onclick="toggleMorphChain()" aria-label="Toggle preset morphing chain">&#128279; MORPH CHAIN</button>
+        <button onclick="importMIDI()" aria-label="Import MIDI file">&#128229; MIDI IN</button>
         <button onclick="toggleHelp()" aria-label="Show keyboard shortcuts help">&#10067; HELP</button>
         <button onclick="toggleMuteGroup('DRUMS')">&#129345; DRUMS</button>
         <button onclick="toggleMuteGroup('SYNTHS')">&#127929; SYNTHS</button>
@@ -4142,6 +4143,172 @@ function checkMorphChain(){
     // Morph the current preset
     morphPresets(cat);
   }
+}
+
+// ============================================================
+// MIDI FILE IMPORT — Import Standard MIDI File into patterns
+// ============================================================
+function importMIDI(){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.mid,.midi';
+  input.onchange = function(e){
+    const file = e.target.files[0];
+    if(!file)return;
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        const midiData = parseMIDI(new Uint8Array(ev.target.result));
+        if(midiData && midiData.notes && midiData.notes.length > 0){
+          applyMIDIToPatterns(midiData);
+          toast('MIDI IMPORTED — '+midiData.notes.length+' notes');
+        } else {
+          toast('MIDI IMPORT: No notes found');
+        }
+      }catch(err){
+        toast('MIDI IMPORT FAILED: '+err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  input.click();
+}
+
+function parseMIDI(bytes){
+  const notes = [];
+  let pos = 0;
+  
+  // Read MThd header
+  if(bytes[0]!==0x4D||bytes[1]!==0x54||bytes[2]!==0x68||bytes[3]!==0x64){
+    throw new Error('Invalid MIDI file (no MThd header)');
+  }
+  pos += 4;
+  
+  // Read header length
+  const headerLen = (bytes[pos]<<24)|(bytes[pos+1]<<16)|(bytes[pos+2]<<8)|bytes[pos+3];
+  pos += 4;
+  
+  // Read format
+  const format = (bytes[pos]<<8)|bytes[pos+1];
+  pos += 2;
+  
+  // Read number of tracks
+  const numTracks = (bytes[pos]<<8)|bytes[pos+1];
+  pos += 2;
+  
+  // Read ticks per beat
+  const ticksPerBeat = (bytes[pos]<<8)|bytes[pos+1];
+  pos += 2;
+  
+  // Skip rest of header
+  pos = 8 + 4 + headerLen;
+  
+  // Read tracks
+  for(let t=0; t<numTracks; t++){
+    // Read MTrk header
+    if(bytes[pos]!==0x4D||bytes[pos+1]!==0x54||bytes[pos+2]!==0x72||bytes[pos+3]!==0x6B){
+      break;
+    }
+    pos += 4;
+    
+    // Read track length
+    const trackLen = (bytes[pos]<<24)|(bytes[pos+1]<<16)|(bytes[pos+2]<<8)|bytes[pos+3];
+    pos += 4;
+    
+    const trackEnd = pos + trackLen;
+    let tick = 0;
+    let runningStatus = 0;
+    
+    while(pos < trackEnd){
+      // Read delta time (variable length)
+      let delta = 0;
+      let byte = bytes[pos++];
+      delta = byte & 0x7F;
+      while(byte & 0x80){
+        byte = bytes[pos++];
+        delta = (delta << 7) | (byte & 0x7F);
+      }
+      tick += delta;
+      
+      // Read event
+      let status = bytes[pos];
+      if(status & 0x80){
+        runningStatus = status;
+        pos++;
+      } else {
+        status = runningStatus;
+      }
+      
+      const type = status & 0xF0;
+      const channel = status & 0x0F;
+      
+      if(type === 0x90){ // Note On
+        const note = bytes[pos++];
+        const vel = bytes[pos++];
+        if(vel > 0){
+          notes.push({tick, note, vel, channel});
+        }
+      } else if(type === 0x80){ // Note Off
+        pos += 2;
+      } else if(type === 0xA0 || type === 0xB0 || type === 0xE0){ // Aftertouch, CC, Pitch Bend
+        pos += 2;
+      } else if(type === 0xC0 || type === 0xD0){ // Program Change, Channel Pressure
+        pos += 1;
+      } else if(status === 0xFF){ // Meta event
+        pos++; // meta type
+        let len = 0;
+        let b = bytes[pos++];
+        len = b & 0x7F;
+        while(b & 0x80){
+          b = bytes[pos++];
+          len = (len << 7) | (b & 0x7F);
+        }
+        pos += len;
+      } else if(status === 0xF0 || status === 0xF7){ // SysEx
+        let len = 0;
+        let b = bytes[pos++];
+        len = b & 0x7F;
+        while(b & 0x80){
+          b = bytes[pos++];
+          len = (len << 7) | (b & 0x7F);
+        }
+        pos += len;
+      }
+    }
+    pos = trackEnd;
+  }
+  
+  return {notes, ticksPerBeat};
+}
+
+function applyMIDIToPatterns(midiData){
+  // Map MIDI notes to patterns
+  // This is a simplified mapping — maps first 16 notes to LEAD pattern
+  const notes = midiData.notes;
+  const stepsPerBar = 16;
+  
+  pushUndo();
+  
+  // Clear LEAD pattern
+  for(let i=0; i<16; i++){
+    patterns.lead[i].on = false;
+    patterns.lead[i].note = 0;
+    patterns.lead[i].vel = 0.8;
+  }
+  
+  // Map first 16 notes to LEAD pattern
+  const scale = SCALES[currentScale]||SCALES['Phrygian Dominant'];
+  for(let i=0; i<Math.min(16, notes.length); i++){
+    const midiNote = notes[i].note;
+    const scaleDegree = scale.indexOf(midiNote % 12);
+    if(scaleDegree >= 0){
+      patterns.lead[i].on = true;
+      patterns.lead[i].note = scaleDegree;
+      patterns.lead[i].vel = Math.round(notes[i].vel/127*100)/100;
+    }
+  }
+  
+  updateSeqUI();
 }
 
 // ============================================================
