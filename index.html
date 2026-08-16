@@ -936,9 +936,6 @@ class PooledEngine{
     this.saturator.oversample='2x';
     this.saturatorMix=ctx.createGain();
     this.saturatorMix.gain.value=0.15;
-    this.drive.createWaveShaper();
-    this.drive.curve=this.makeDriveCurve(0);
-    this.drive.oversample='2x';
     // Chain: master -> drive -> masterFilter -> comp -> analyser -> destination
     this.master.connect(this.drive);
     this.drive.connect(this.masterFilter);
