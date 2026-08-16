@@ -955,6 +955,21 @@ class PooledEngine{
     this.reverbMix.connect(this.comp);
     // Connect chain: comp -> saturator -> limiter -> analyser -> destination (v6.4)
     this.comp.connect(this.saturator);
+    // Chorus effect (v6.6)
+    this.chorus=ctx.createDelay(0.05);
+    this.chorus.delayTime.value=0.025;
+    this.chorusLFO=ctx.createOscillator();
+    this.chorusLFO.frequency.value=0.5;
+    this.chorusLFODepth=ctx.createGain();
+    this.chorusLFODepth.gain.value=0.005;
+    this.chorusLFO.connect(this.chorusLFODepth);
+    this.chorusLFODepth.connect(this.chorus.delayTime);
+    this.chorusLFO.start();
+    this.chorusMix=ctx.createGain();
+    this.chorusMix.gain.value=0.3;
+    this.saturator.connect(this.chorus);
+    this.chorus.connect(this.chorusMix);
+    this.chorusMix.connect(this.limiter);
     this.saturator.connect(this.limiter);
     this.limiter.connect(this.analyser);
     this.analyser.connect(ctx.destination);
@@ -970,9 +985,19 @@ class PooledEngine{
     this.trackBuses=[];
     this.trackDelaySends=[];
     this.trackReverbSends=[];
+    this.trackEQ=[];
     for(let i=0;i<6;i++){
-      const g=ctx.createGain();g.gain.value=0.8;g.connect(this.master);
+      const g=ctx.createGain();g.gain.value=0.8;
+      // Track EQ (v6.6)
+      const eq=ctx.createBiquadFilter();
+      eq.type='peaking';
+      eq.frequency.value=1000;
+      eq.Q.value=1;
+      eq.gain.value=0;
+      g.connect(eq);
+      eq.connect(this.master);
       this.trackBuses.push(g);
+      this.trackEQ.push(eq);
       // Delay send (default: KICK 0, BASS 0.1, others 0.3)
       const ds=ctx.createGain();ds.gain.value=(i===0)?0:(i===1)?0.1:0.3;
       g.connect(ds);ds.connect(this.delay);
